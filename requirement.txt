@@ -2,5 +2,9 @@ streamlit
 numpy
 pandas
 scikit-learn
-tensorflow
 joblib
+tensorflow
+sqlite-utils
+matplotlib
+seaborn
+shap

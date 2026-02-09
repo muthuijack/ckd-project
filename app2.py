@@ -4,6 +4,10 @@ import pandas as pd
 import sqlite3
 import joblib
 from tensorflow.keras.models import load_model
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from io import BytesIO
 
 # =====================================================
 # DATABASE FUNCTIONS
@@ -53,12 +57,13 @@ def load_models():
 
 dnn_model, rf_model, scaler = load_models()
 
+FEATURES = list(scaler.feature_names_in_)
+
 # =====================================================
 # STREAMLIT UI
 # =====================================================
 st.set_page_config(page_title="CKD Prediction System", layout="centered")
 st.title("🩺 Chronic Kidney Disease Prediction System")
-st.write("Predict CKD using **Deep Neural Network** or **Random Forest**")
 
 model_choice = st.radio(
     "Select Prediction Model",
@@ -121,10 +126,37 @@ for col in df.columns:
     if df[col].dtype == object:
         df[col] = df[col].map(binary_map)
 
+df = df[FEATURES]
 df_scaled = scaler.transform(df)
 
 # =====================================================
-# PREDICTION & SAVE
+# PDF REPORT FUNCTION
+# =====================================================
+def generate_pdf(name, email, model, prob, pred, data):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("<b>Chronic Kidney Disease Prediction Report</b>", styles["Title"]))
+    elements.append(Spacer(1, 12))
+
+    elements.append(Paragraph(f"Patient Name: {name}", styles["Normal"]))
+    elements.append(Paragraph(f"Email: {email}", styles["Normal"]))
+    elements.append(Paragraph(f"Model Used: {model}", styles["Normal"]))
+    elements.append(Paragraph(f"Prediction: {'CKD Detected' if pred else 'No CKD'}", styles["Normal"]))
+    elements.append(Paragraph(f"Probability: {prob:.2%}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    table_data = [["Test", "Value"]] + [[k, str(v)] for k, v in data.items()]
+    elements.append(Table(table_data))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# =====================================================
+# PREDICTION
 # =====================================================
 if st.button("🔍 Predict CKD"):
 
@@ -132,50 +164,21 @@ if st.button("🔍 Predict CKD"):
         prob = float(dnn_model.predict(df_scaled)[0][0])
         pred = 1 if prob > 0.5 else 0
     else:
-        prob = float(rf_model.predict_proba(df)[0][1])
-        pred = rf_model.predict(df)[0]
+        prob = float(rf_model.predict_proba(df_scaled)[0][1])
+        pred = rf_model.predict(df_scaled)[0]
 
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        "INSERT INTO patients (full_name, email) VALUES (?, ?)",
-        (full_name, email)
-    )
-    patient_id = cur.lastrowid
-
-    cur.execute(
-        """
-        INSERT INTO predictions (patient_id, model_used, probability, prediction)
-        VALUES (?, ?, ?, ?)
-        """,
-        (patient_id, model_choice, prob, pred)
+    pdf = generate_pdf(
+        full_name, email, model_choice, prob, pred, df.iloc[0].to_dict()
     )
 
-    conn.commit()
-    conn.close()
-
-    st.divider()
-    if pred == 1:
-        st.error(f"⚠️ CKD Detected\n\nProbability: {prob:.2%}")
+    if pred:
+        st.error(f"⚠️ CKD Detected (Probability: {prob:.2%})")
     else:
-        st.success(f"✅ No CKD Detected\n\nProbability: {1-prob:.2%}")
+        st.success(f"✅ No CKD Detected (Probability: {1-prob:.2%})")
 
-    st.caption(f"Model Used: {model_choice}")
-
-# =====================================================
-# VIEW DATABASE
-# =====================================================
-st.divider()
-if st.checkbox("📊 View Stored Predictions"):
-    conn = get_connection()
-    df_db = pd.read_sql("""
-        SELECT p.full_name, p.email, pr.model_used,
-            pr.probability, pr.prediction, pr.created_at
-        FROM predictions pr
-        JOIN patients p ON p.patient_id = pr.patient_id
-        ORDER BY pr.created_at DESC
-    """, conn)
-    conn.close()
-
-    st.dataframe(df_db)
+    st.download_button(
+        "📄 Download Medical Report (PDF)",
+        data=pdf,
+        file_name="ckd_report.pdf",
+        mime="application/pdf"
+    )

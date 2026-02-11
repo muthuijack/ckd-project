@@ -4,17 +4,10 @@ import pandas as pd
 import sqlite3
 import joblib
 from tensorflow.keras.models import load_model
-
-# PDF
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from io import BytesIO
-
-# =====================================================
-# CONFIG
-# =====================================================
-st.set_page_config(page_title="CKD Prediction System", layout="centered")
 
 # =====================================================
 # DATABASE
@@ -63,20 +56,13 @@ def load_models():
 
 dnn_model, rf_model, scaler = load_models()
 
-# =====================================================
-# OFFICIAL FEATURE LIST (SAFE)
-# =====================================================
-FEATURES = [
-    "age", "bp", "sg", "al", "su", "rbc", "pc", "pcc", "ba",
-    "bgr", "bu", "sc", "sod", "pot", "hemo", "pcv",
-    "wc", "rc", "htn", "dm", "cad", "appet", "pe", "ane"
-]
+EXPECTED_FEATURES = list(scaler.feature_names_in_)
 
 # =====================================================
 # UI
 # =====================================================
+st.set_page_config(page_title="CKD Prediction System", layout="centered")
 st.title("🩺 Chronic Kidney Disease Prediction System")
-st.write("Predict CKD using **Deep Neural Network** or **Random Forest**")
 
 model_choice = st.radio(
     "Select Prediction Model",
@@ -85,9 +71,6 @@ model_choice = st.radio(
 
 st.divider()
 
-# =====================================================
-# PATIENT INFO
-# =====================================================
 st.subheader("Patient Information")
 full_name = st.text_input("Full Name")
 email = st.text_input("Email")
@@ -98,7 +81,7 @@ def user_input():
     data = {
         "age": st.number_input("Age", 1, 120, 45),
         "bp": st.number_input("Blood Pressure", 50, 200, 80),
-        "sg": st.selectbox("Specific Gravity", [1.005, 1.010, 1.015, 1.020, 1.025]),
+        "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
         "al": st.selectbox("Albumin", [0,1,2,3,4,5]),
         "su": st.selectbox("Sugar", [0,1,2,3,4,5]),
         "rbc": st.selectbox("Red Blood Cells", ["normal","abnormal"]),
@@ -139,11 +122,17 @@ for col in df.columns:
     if df[col].dtype == object:
         df[col] = df[col].map(binary_map)
 
-df = df.reindex(columns=FEATURES)
-df_scaled = scaler.transform(df)
+# Align features SAFELY
+for col in EXPECTED_FEATURES:
+    if col not in df.columns:
+        df[col] = 0
+
+df = df[EXPECTED_FEATURES]
+
+df_scaled = scaler.transform(df.values)
 
 # =====================================================
-# PDF REPORT
+# PDF
 # =====================================================
 def generate_pdf(name, email, model, prob, pred, data):
     buffer = BytesIO()
@@ -151,12 +140,12 @@ def generate_pdf(name, email, model, prob, pred, data):
     styles = getSampleStyleSheet()
     elements = []
 
-    elements.append(Paragraph("<b>Chronic Kidney Disease Prediction Report</b>", styles["Title"]))
+    elements.append(Paragraph("<b>CKD Medical Prediction Report</b>", styles["Title"]))
     elements.append(Spacer(1, 12))
 
-    elements.append(Paragraph(f"<b>Patient:</b> {name}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Name:</b> {name}", styles["Normal"]))
     elements.append(Paragraph(f"<b>Email:</b> {email}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Model Used:</b> {model}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Model:</b> {model}", styles["Normal"]))
     elements.append(Paragraph(
         f"<b>Prediction:</b> {'CKD Detected' if pred else 'No CKD'}",
         styles["Normal"]
@@ -172,51 +161,29 @@ def generate_pdf(name, email, model, prob, pred, data):
     return buffer
 
 # =====================================================
-# PREDICTION
+# PREDICT
 # =====================================================
 if st.button("🔍 Predict CKD"):
 
     if model_choice == "Deep Neural Network (DNN)":
         prob = float(dnn_model.predict(df_scaled)[0][0])
-        pred = 1 if prob > 0.5 else 0
+        pred = int(prob > 0.5)
     else:
         prob = float(rf_model.predict_proba(df_scaled)[0][1])
         pred = int(rf_model.predict(df_scaled)[0])
-
-    # Save
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        "INSERT INTO patients (full_name, email) VALUES (?, ?)",
-        (full_name, email)
-    )
-    patient_id = cur.lastrowid
-
-    cur.execute(
-        """
-        INSERT INTO predictions (patient_id, model_used, probability, prediction)
-        VALUES (?, ?, ?, ?)
-        """,
-        (patient_id, model_choice, prob, pred)
-    )
-
-    conn.commit()
-    conn.close()
-
-    # Result
-    if pred:
-        st.error(f"⚠️ CKD Detected (Probability: {prob:.2%})")
-    else:
-        st.success(f"✅ No CKD Detected (Probability: {1-prob:.2%})")
 
     pdf = generate_pdf(
         full_name, email, model_choice, prob, pred, df.iloc[0].to_dict()
     )
 
+    if pred:
+        st.error(f"⚠️ CKD Detected (Probability: {prob:.2%})")
+    else:
+        st.success(f"✅ No CKD Detected (Probability: {1 - prob:.2%})")
+
     st.download_button(
         "📄 Download Medical Report (PDF)",
-        data=pdf,
-        file_name="ckd_report.pdf",
-        mime="application/pdf"
+        pdf,
+        "ckd_report.pdf",
+        "application/pdf"
     )

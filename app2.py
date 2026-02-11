@@ -57,6 +57,7 @@ def load_models():
 
 dnn_model, rf_model, scaler = load_models()
 
+# training feature names (SOURCE OF TRUTH)
 FEATURES = list(scaler.feature_names_in_)
 
 # =====================================================
@@ -85,13 +86,13 @@ def user_input():
     data = {
         "age": st.number_input("Age", 1, 120, 45),
         "bp": st.number_input("Blood Pressure", 50, 200, 80),
-        "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
-        "al": st.selectbox("Albumin", [0,1,2,3,4,5]),
-        "su": st.selectbox("Sugar", [0,1,2,3,4,5]),
-        "rbc": st.selectbox("Red Blood Cells", ["normal","abnormal"]),
-        "pc": st.selectbox("Pus Cell", ["normal","abnormal"]),
-        "pcc": st.selectbox("Pus Cell Clumps", ["notpresent","present"]),
-        "ba": st.selectbox("Bacteria", ["notpresent","present"]),
+        "sg": st.selectbox("Specific Gravity", [1.005, 1.010, 1.015, 1.020, 1.025]),
+        "al": st.selectbox("Albumin", [0, 1, 2, 3, 4, 5]),
+        "su": st.selectbox("Sugar", [0, 1, 2, 3, 4, 5]),
+        "rbc": st.selectbox("Red Blood Cells", ["normal", "abnormal"]),
+        "pc": st.selectbox("Pus Cell", ["normal", "abnormal"]),
+        "pcc": st.selectbox("Pus Cell Clumps", ["notpresent", "present"]),
+        "ba": st.selectbox("Bacteria", ["notpresent", "present"]),
         "bgr": st.number_input("Blood Glucose Random", 50, 500, 120),
         "bu": st.number_input("Blood Urea", 1, 400, 40),
         "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
@@ -101,19 +102,19 @@ def user_input():
         "pcv": st.number_input("Packed Cell Volume", 10, 60, 40),
         "wc": st.number_input("White Blood Cell Count", 3000, 20000, 8000),
         "rc": st.number_input("Red Blood Cell Count", 2.0, 8.0, 4.5),
-        "htn": st.selectbox("Hypertension", ["no","yes"]),
-        "dm": st.selectbox("Diabetes Mellitus", ["no","yes"]),
-        "cad": st.selectbox("Coronary Artery Disease", ["no","yes"]),
-        "appet": st.selectbox("Appetite", ["good","poor"]),
-        "pe": st.selectbox("Pedal Edema", ["no","yes"]),
-        "ane": st.selectbox("Anemia", ["no","yes"])
+        "htn": st.selectbox("Hypertension", ["no", "yes"]),
+        "dm": st.selectbox("Diabetes Mellitus", ["no", "yes"]),
+        "cad": st.selectbox("Coronary Artery Disease", ["no", "yes"]),
+        "appet": st.selectbox("Appetite", ["good", "poor"]),
+        "pe": st.selectbox("Pedal Edema", ["no", "yes"]),
+        "ane": st.selectbox("Anemia", ["no", "yes"]),
     }
     return pd.DataFrame([data])
 
 df = user_input()
 
 # =====================================================
-# ENCODING
+# ENCODING (SAFE)
 # =====================================================
 binary_map = {
     "normal": 0, "abnormal": 1,
@@ -124,9 +125,19 @@ binary_map = {
 
 for col in df.columns:
     if df[col].dtype == object:
-        df[col] = df[col].map(binary_map)
+        df[col] = df[col].map(binary_map).astype(float)
 
-df = df[FEATURES]
+# =====================================================
+# SAFE FEATURE ALIGNMENT (FIXES KeyError)
+# =====================================================
+df = df.reindex(columns=FEATURES)
+
+if df.isnull().any().any():
+    missing = df.columns[df.isnull().any()].tolist()
+    st.error("❌ Missing or invalid input values for:")
+    st.write(missing)
+    st.stop()
+
 df_scaled = scaler.transform(df)
 
 # =====================================================
@@ -138,7 +149,7 @@ def generate_pdf(name, email, model, prob, pred, data):
     styles = getSampleStyleSheet()
     elements = []
 
-    elements.append(Paragraph("<b>Chronic Kidney Disease Prediction Report</b>", styles["Title"]))
+    elements.append(Paragraph("Chronic Kidney Disease Prediction Report", styles["Title"]))
     elements.append(Spacer(1, 12))
 
     elements.append(Paragraph(f"Patient Name: {name}", styles["Normal"]))
@@ -161,11 +172,11 @@ def generate_pdf(name, email, model, prob, pred, data):
 if st.button("🔍 Predict CKD"):
 
     if model_choice == "Deep Neural Network (DNN)":
-        prob = float(dnn_model.predict(df_scaled)[0][0])
-        pred = 1 if prob > 0.5 else 0
+        prob = float(dnn_model.predict(df_scaled, verbose=0)[0][0])
+        pred = 1 if prob >= 0.5 else 0
     else:
         prob = float(rf_model.predict_proba(df_scaled)[0][1])
-        pred = rf_model.predict(df_scaled)[0]
+        pred = int(rf_model.predict(df_scaled)[0])
 
     pdf = generate_pdf(
         full_name, email, model_choice, prob, pred, df.iloc[0].to_dict()
@@ -174,7 +185,7 @@ if st.button("🔍 Predict CKD"):
     if pred:
         st.error(f"⚠️ CKD Detected (Probability: {prob:.2%})")
     else:
-        st.success(f"✅ No CKD Detected (Probability: {1-prob:.2%})")
+        st.success(f"✅ No CKD Detected (Probability: {1 - prob:.2%})")
 
     st.download_button(
         "📄 Download Medical Report (PDF)",

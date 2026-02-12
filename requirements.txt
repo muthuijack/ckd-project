@@ -9,3 +9,4 @@ seaborn
 shap
 sqlite-utils
 reportlab
+fpdf

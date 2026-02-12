@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import joblib
 from io import BytesIO
+from tensorflow.keras.models import load_model
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
@@ -67,24 +68,27 @@ language = st.selectbox("🌍 Language / Lugha / Langue", list(TEXT.keys()))
 T = TEXT[language]
 
 # =====================================================
-# LOAD MODEL & SCALER (SAFE)
+# LOAD MODELS (ORIGINAL – SAFE)
 # =====================================================
-MODEL_PATH = "ckd_model.pkl"
-SCALER_PATH = "scaler.pkl"
+@st.cache_resource
+def load_models():
+    dnn = load_model("ckd_dnn_model.keras")
+    rf = joblib.load("ckd_random_forest.pkl")
+    scaler = joblib.load("scaler.pkl")
+    return dnn, rf, scaler
 
-if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-    st.error("❌ Model files missing. Ensure ckd_model.pkl & scaler.pkl are in the repo.")
-    st.stop()
-
-model = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
-
+dnn_model, rf_model, scaler = load_models()
 FEATURES = list(scaler.feature_names_in_)
 
 # =====================================================
 # UI
 # =====================================================
 st.title(T["title"])
+
+model_choice = st.radio(
+    "Select Model",
+    ["Deep Neural Network (DNN)", "Random Forest"]
+)
 
 # =====================================================
 # PATIENT INFO
@@ -96,10 +100,10 @@ email = st.text_input("Email")
 st.subheader(T["medical"])
 
 # =====================================================
-# USER INPUTS
+# USER INPUT
 # =====================================================
 def user_input():
-    data = {
+    return pd.DataFrame([{
         "age": st.number_input("Age", 1, 120, 45),
         "bp": st.number_input("Blood Pressure", 50, 200, 80),
         "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
@@ -124,8 +128,7 @@ def user_input():
         "appet": st.selectbox("Appetite", ["good","poor"]),
         "pe": st.selectbox("Pedal Edema", ["no","yes"]),
         "ane": st.selectbox("Anemia", ["no","yes"])
-    }
-    return pd.DataFrame([data])
+    }])
 
 df = user_input()
 
@@ -143,13 +146,13 @@ for col in df.columns:
     if df[col].dtype == object:
         df[col] = df[col].map(binary_map)
 
-df = df[FEATURES]
+df = df.reindex(columns=FEATURES)
 df_scaled = scaler.transform(df)
 
 # =====================================================
 # PDF REPORT
 # =====================================================
-def generate_pdf(name, email, prob, pred):
+def generate_pdf(prob, pred, model_name):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -157,13 +160,13 @@ def generate_pdf(name, email, prob, pred):
 
     elements.append(Paragraph(f"<b>{T['report_title']}</b>", styles["Title"]))
     elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"{T['model']}: ML Model", styles["Normal"]))
+    elements.append(Paragraph(f"{T['model']}: {model_name}", styles["Normal"]))
     elements.append(Paragraph(f"{T['prediction']}: {'CKD' if pred else 'No CKD'}", styles["Normal"]))
     elements.append(Paragraph(f"{T['probability']}: {prob:.2%}", styles["Normal"]))
     elements.append(Spacer(1, 12))
 
-    table_data = [["Feature", "Value"]] + [[k, str(v)] for k, v in df.iloc[0].to_dict().items()]
-    elements.append(Table(table_data))
+    table = [["Feature", "Value"]] + list(df.iloc[0].astype(str).items())
+    elements.append(Table(table))
 
     doc.build(elements)
     buffer.seek(0)
@@ -173,10 +176,15 @@ def generate_pdf(name, email, prob, pred):
 # PREDICTION
 # =====================================================
 if st.button(T["predict"]):
-    prob = float(model.predict_proba(df_scaled)[0][1])
-    pred = 1 if prob > 0.5 else 0
 
-    pdf = generate_pdf(name, email, prob, pred)
+    if model_choice == "Deep Neural Network (DNN)":
+        prob = float(dnn_model.predict(df_scaled)[0][0])
+        pred = 1 if prob > 0.5 else 0
+    else:
+        prob = float(rf_model.predict_proba(df_scaled)[0][1])
+        pred = rf_model.predict(df_scaled)[0]
+
+    pdf = generate_pdf(prob, pred, model_choice)
 
     if pred:
         st.error(f"{T['ckd']} ({prob:.2%})")

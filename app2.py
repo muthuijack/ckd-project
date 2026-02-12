@@ -110,12 +110,14 @@ create_tables()
 # =====================================================
 # LOAD MODEL & SCALER (UNCHANGED)
 # =====================================================
-MODEL_PATH = "ckd_model.pkl"
-SCALER_PATH = "scaler.pkl"
+@st.cache_resource
+def load_models():
+    dnn = load_model("ckd_dnn_model.keras")
+    rf = joblib.load("ckd_random_forest.pkl")
+    scaler = joblib.load("scaler.pkl")
+    return dnn, rf, scaler
 
-model = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
-
+dnn_model, rf_model, scaler = load_models()
 FEATURES = list(scaler.feature_names_in_)
 
 # =====================================================
@@ -306,3 +308,4 @@ if not data.empty:
 
 else:
     st.info("No records yet.")
+

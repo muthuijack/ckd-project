@@ -1,189 +1,133 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-import sqlite3
+import numpy as np
 import joblib
-from tensorflow.keras.models import load_model
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import A4
-from io import BytesIO
+from fpdf import FPDF
+from datetime import datetime
 
-# =====================================================
-# DATABASE
-# =====================================================
-def get_connection():
-    return sqlite3.connect("ckd.db", check_same_thread=False)
+# -----------------------------
+# CONFIG
+# -----------------------------
+st.set_page_config(page_title="CKD Predictor", layout="centered")
 
-def create_tables():
-    conn = get_connection()
-    cur = conn.cursor()
+MODEL_PATH = "ckd_model.pkl"
+SCALER_PATH = "scaler.pkl"
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS patients (
-        patient_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT,
-        email TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
+model = joblib.load(MODEL_PATH)
+scaler = joblib.load(SCALER_PATH)
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS predictions (
-        prediction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER,
-        model_used TEXT,
-        probability REAL,
-        prediction INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
+FEATURES = [
+    "age", "bp", "sg", "al", "su",
+    "rbc", "pc", "pcc", "ba",
+    "bgr", "bu", "sc", "sod", "pot",
+    "hemo", "pcv", "wc", "rc"
+]
 
-    conn.commit()
-    conn.close()
-
-create_tables()
-
-# =====================================================
-# LOAD MODELS
-# =====================================================
-@st.cache_resource
-def load_models():
-    dnn = load_model("ckd_dnn_model.keras")
-    rf = joblib.load("ckd_random_forest.pkl")
-    scaler = joblib.load("scaler.pkl")
-    return dnn, rf, scaler
-
-dnn_model, rf_model, scaler = load_models()
-
-EXPECTED_FEATURES = list(scaler.feature_names_in_)
-
-# =====================================================
-# UI
-# =====================================================
-st.set_page_config(page_title="CKD Prediction System", layout="centered")
-st.title("🩺 Chronic Kidney Disease Prediction System")
-
-model_choice = st.radio(
-    "Select Prediction Model",
-    ["Deep Neural Network (DNN)", "Random Forest"]
-)
-
-st.divider()
-
-st.subheader("Patient Information")
-full_name = st.text_input("Full Name")
-email = st.text_input("Email")
-
-st.subheader("Medical Test Results")
-
-def user_input():
-    data = {
-        "age": st.number_input("Age", 1, 120, 45),
-        "bp": st.number_input("Blood Pressure", 50, 200, 80),
-        "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
-        "al": st.selectbox("Albumin", [0,1,2,3,4,5]),
-        "su": st.selectbox("Sugar", [0,1,2,3,4,5]),
-        "rbc": st.selectbox("Red Blood Cells", ["normal","abnormal"]),
-        "pc": st.selectbox("Pus Cell", ["normal","abnormal"]),
-        "pcc": st.selectbox("Pus Cell Clumps", ["notpresent","present"]),
-        "ba": st.selectbox("Bacteria", ["notpresent","present"]),
-        "bgr": st.number_input("Blood Glucose Random", 50, 500, 120),
-        "bu": st.number_input("Blood Urea", 1, 400, 40),
-        "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
-        "sod": st.number_input("Sodium", 100, 200, 135),
-        "pot": st.number_input("Potassium", 2.0, 10.0, 4.5),
-        "hemo": st.number_input("Hemoglobin", 3.0, 20.0, 13.5),
-        "pcv": st.number_input("Packed Cell Volume", 10, 60, 40),
-        "wc": st.number_input("White Blood Cell Count", 3000, 20000, 8000),
-        "rc": st.number_input("Red Blood Cell Count", 2.0, 8.0, 4.5),
-        "htn": st.selectbox("Hypertension", ["no","yes"]),
-        "dm": st.selectbox("Diabetes Mellitus", ["no","yes"]),
-        "cad": st.selectbox("Coronary Artery Disease", ["no","yes"]),
-        "appet": st.selectbox("Appetite", ["good","poor"]),
-        "pe": st.selectbox("Pedal Edema", ["no","yes"]),
-        "ane": st.selectbox("Anemia", ["no","yes"])
+# -----------------------------
+# LANGUAGE DICTIONARY
+# -----------------------------
+LANG = {
+    "English": {
+        "title": "Chronic Kidney Disease Predictor",
+        "subtitle": "Enter patient details",
+        "predict": "Predict",
+        "result_ckd": "⚠️ CKD Detected",
+        "result_no_ckd": "✅ No CKD Detected",
+        "download": "Download PDF Report",
+        "language": "Select Language",
+        "report_title": "CKD Prediction Report",
+        "date": "Date"
+    },
+    "Swahili": {
+        "title": "Kikadirio cha Ugonjwa wa Figo",
+        "subtitle": "Weka taarifa za mgonjwa",
+        "predict": "Kadiria",
+        "result_ckd": "⚠️ Ugonjwa wa figo umetambuliwa",
+        "result_no_ckd": "✅ Hakuna ugonjwa wa figo",
+        "download": "Pakua Ripoti ya PDF",
+        "language": "Chagua Lugha",
+        "report_title": "Ripoti ya Ugonjwa wa Figo",
+        "date": "Tarehe"
+    },
+    "French": {
+        "title": "Prédiction de Maladie Rénale",
+        "subtitle": "Entrez les informations du patient",
+        "predict": "Prédire",
+        "result_ckd": "⚠️ Maladie rénale détectée",
+        "result_no_ckd": "✅ Aucune maladie rénale détectée",
+        "download": "Télécharger le rapport PDF",
+        "language": "Choisir la langue",
+        "report_title": "Rapport de Prédiction Rénale",
+        "date": "Date"
     }
-    return pd.DataFrame([data])
-
-df = user_input()
-
-# =====================================================
-# ENCODING
-# =====================================================
-binary_map = {
-    "normal": 0, "abnormal": 1,
-    "no": 0, "yes": 1,
-    "notpresent": 0, "present": 1,
-    "good": 0, "poor": 1
 }
 
-for col in df.columns:
-    if df[col].dtype == object:
-        df[col] = df[col].map(binary_map)
+# -----------------------------
+# LANGUAGE SELECTOR
+# -----------------------------
+language = st.sidebar.selectbox(
+    "🌍 Language / Lugha / Langue",
+    list(LANG.keys())
+)
 
-# Align features SAFELY
-for col in EXPECTED_FEATURES:
-    if col not in df.columns:
-        df[col] = 0
+T = LANG[language]
 
-df = df[EXPECTED_FEATURES]
+# -----------------------------
+# UI
+# -----------------------------
+st.title(T["title"])
+st.subheader(T["subtitle"])
 
-df_scaled = scaler.transform(df.values)
-
-# =====================================================
-# PDF
-# =====================================================
-def generate_pdf(name, email, model, prob, pred, data):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    elements = []
-
-    elements.append(Paragraph("<b>CKD Medical Prediction Report</b>", styles["Title"]))
-    elements.append(Spacer(1, 12))
-
-    elements.append(Paragraph(f"<b>Name:</b> {name}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Email:</b> {email}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Model:</b> {model}", styles["Normal"]))
-    elements.append(Paragraph(
-        f"<b>Prediction:</b> {'CKD Detected' if pred else 'No CKD'}",
-        styles["Normal"]
-    ))
-    elements.append(Paragraph(f"<b>Probability:</b> {prob:.2%}", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    table_data = [["Feature", "Value"]] + [[k, str(v)] for k, v in data.items()]
-    elements.append(Table(table_data))
-
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-# =====================================================
-# PREDICT
-# =====================================================
-if st.button("🔍 Predict CKD"):
-
-    if model_choice == "Deep Neural Network (DNN)":
-        prob = float(dnn_model.predict(df_scaled)[0][0])
-        pred = int(prob > 0.5)
-    else:
-        prob = float(rf_model.predict_proba(df_scaled)[0][1])
-        pred = int(rf_model.predict(df_scaled)[0])
-
-    pdf = generate_pdf(
-        full_name, email, model_choice, prob, pred, df.iloc[0].to_dict()
+inputs = {}
+for feature in FEATURES:
+    inputs[feature] = st.number_input(
+        feature.upper(),
+        min_value=0.0,
+        step=0.1
     )
 
-    if pred:
-        st.error(f"⚠️ CKD Detected (Probability: {prob:.2%})")
-    else:
-        st.success(f"✅ No CKD Detected (Probability: {1 - prob:.2%})")
+# -----------------------------
+# PREDICTION
+# -----------------------------
+if st.button(T["predict"]):
+    df = pd.DataFrame([inputs])
 
-    st.download_button(
-        "📄 Download Medical Report (PDF)",
-        pdf,
-        "ckd_report.pdf",
-        "application/pdf"
-    )
+    df_scaled = scaler.transform(df)
+    prediction = model.predict(df_scaled)[0]
+
+    if prediction == 1:
+        st.error(T["result_ckd"])
+        result_text = T["result_ckd"]
+    else:
+        st.success(T["result_no_ckd"])
+        result_text = T["result_no_ckd"]
+
+    # -----------------------------
+    # PDF GENERATION (UNICODE SAFE)
+    # -----------------------------
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.add_font("Arial", "", "", uni=True)
+    pdf.set_font("Arial", size=12)
+
+    pdf.cell(0, 10, T["report_title"], ln=True)
+    pdf.cell(0, 10, f"{T['date']}: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    pdf.ln(5)
+
+    for k, v in inputs.items():
+        pdf.cell(0, 8, f"{k.upper()}: {v}", ln=True)
+
+    pdf.ln(5)
+    pdf.set_font("Arial", size=14)
+    pdf.cell(0, 10, result_text, ln=True)
+
+    pdf_path = "ckd_report.pdf"
+    pdf.output(pdf_path)
+
+    with open(pdf_path, "rb") as f:
+        st.download_button(
+            T["download"],
+            f,
+            file_name="CKD_Report.pdf",
+            mime="application/pdf"
+        )

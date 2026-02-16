@@ -221,5 +221,6 @@ if st.button(T["predict"], key="predict_btn"):
 
         display_risk(prob)
 
-        cursor.execute("""
+        cursor.execute(""""
             INSERT INTO
+

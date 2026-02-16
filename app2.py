@@ -62,6 +62,7 @@ FEATURES = list(scaler.feature_names_in_)
 # DATABASE
 # =====================================================
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
+
 conn.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +88,7 @@ email = st.text_input("Email", key="email")
 st.subheader("Medical Test Results")
 
 # =====================================================
-# INPUT FORM (SAFE + UNIQUE KEYS)
+# INPUT FORM (MATCHES TRAINING FEATURES)
 # =====================================================
 def user_input():
     return pd.DataFrame([{
@@ -135,13 +136,20 @@ for col in df.columns:
 
 df = df.fillna(0)
 
-# Guarantee exact feature order
-df = df[FEATURES]
+# =====================================================
+# SAFE FEATURE ALIGNMENT (NO MORE KEYERROR)
+# =====================================================
+df_aligned = pd.DataFrame(columns=FEATURES)
 
-# Convert strictly numeric
+for col in FEATURES:
+    if col in df.columns:
+        df_aligned[col] = df[col]
+    else:
+        df_aligned[col] = 0
+
+df = df_aligned
 df = df.apply(pd.to_numeric)
 
-# Final NaN protection
 if df.isnull().values.any():
     st.error("Invalid input detected.")
     st.stop()

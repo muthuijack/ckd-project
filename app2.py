@@ -221,7 +221,35 @@ if st.button(T["predict"], key="predict_btn"):
 
         display_risk(prob)
 
-        cursor.execute(""
-            INSERT INTO
+        # ✅ Correctly closed SQL statement
+        cursor.execute("""
+            INSERT INTO predictions
+            (name, email, model_used, probability, prediction, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            name,
+            email,
+            model_choice,
+            float(prob),
+            int(pred),
+            datetime.now().isoformat()
+        ))
+        conn.commit()
+
+        st.success("Prediction saved successfully.")
+
+        pdf = generate_pdf(name, prob, pred)
+
+        st.download_button(
+            T["download"],
+            pdf,
+            file_name="CKD_Report.pdf",
+            mime="application/pdf"
+        )
+
+    except Exception as e:
+        st.error(f"System error: {str(e)}")
+
+
 
 

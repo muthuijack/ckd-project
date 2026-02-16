@@ -25,7 +25,7 @@ TEXT = {
         "download": "📄 Download PDF Report"
     },
     "Swahili": {
-        "title": "🩺 Mfumo wa Utambuzi wa Ugonjwa wa Figo",
+        "title": "🩺 Mfumo wa Ugunduzi wa Ugonjwa wa Figo",
         "predict": "🔍 Tambua Ugonjwa",
         "download": "📄 Pakua Ripoti ya PDF"
     },
@@ -59,13 +59,9 @@ dnn_model, rf_model, scaler = load_models()
 FEATURES = list(scaler.feature_names_in_)
 
 # =====================================================
-# DATABASE SAFE VERSION
+# DATABASE
 # =====================================================
-def get_connection():
-    return sqlite3.connect("ckd.db")
-
-conn = get_connection()
-
+conn = sqlite3.connect("ckd.db", check_same_thread=False)
 conn.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,7 +87,7 @@ email = st.text_input("Email", key="email")
 st.subheader("Medical Test Results")
 
 # =====================================================
-# USER INPUT (ALL UNIQUE KEYS)
+# INPUT FORM (SAFE + UNIQUE KEYS)
 # =====================================================
 def user_input():
     return pd.DataFrame([{
@@ -139,8 +135,22 @@ for col in df.columns:
 
 df = df.fillna(0)
 
-df = df.reindex(columns=FEATURES)
+# Guarantee exact feature order
+df = df[FEATURES]
+
+# Convert strictly numeric
+df = df.apply(pd.to_numeric)
+
+# Final NaN protection
+if df.isnull().values.any():
+    st.error("Invalid input detected.")
+    st.stop()
+
 df_scaled = scaler.transform(df)
+
+if not np.isfinite(df_scaled).all():
+    st.error("Scaling produced invalid values.")
+    st.stop()
 
 # =====================================================
 # RISK DISPLAY
@@ -169,7 +179,7 @@ def display_risk(prob):
     """, unsafe_allow_html=True)
 
 # =====================================================
-# PDF GENERATION
+# PDF REPORT
 # =====================================================
 def generate_pdf(name, probability, prediction):
     buffer = BytesIO()
@@ -195,13 +205,13 @@ if st.button(T["predict"], key="predict_btn"):
 
     try:
         if model_choice == "Deep Neural Network (DNN)":
-            prob = float(dnn_model.predict(df_scaled)[0][0])
+            prob = float(dnn_model.predict(df_scaled, verbose=0)[0][0])
             pred = 1 if prob > 0.5 else 0
         else:
             prob = float(rf_model.predict_proba(df_scaled)[0][1])
             pred = int(rf_model.predict(df_scaled)[0])
 
-        if np.isnan(prob):
+        if not np.isfinite(prob):
             st.error("Model returned invalid probability.")
             st.stop()
 

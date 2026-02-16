@@ -1,3 +1,6 @@
+The syntax error you hit (`SyntaxError: expected 'except' or 'finally' block`) happened because the `try:` block wasn’t properly closed — you left a dangling `cursor.execute` line without finishing the statement. Let me give you the **fully corrected version** of your app code, with the database schema fixed and the prediction logic complete:
+
+```python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -64,7 +67,7 @@ FEATURES = list(scaler.feature_names_in_)
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# Drop and recreate table to guarantee correct schema
+# Ensure schema is correct (drop and recreate)
 cursor.execute("DROP TABLE IF EXISTS predictions")
 cursor.execute("""
 CREATE TABLE predictions (
@@ -221,4 +224,6 @@ if st.button(T["predict"], key="predict_btn"):
 
         display_risk(prob)
 
-        cursor.execute
+        cursor.execute("""
+            INSERT INTO predictions
+            (name, email, model_used, probability, prediction,

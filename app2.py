@@ -64,7 +64,7 @@ FEATURES = list(scaler.feature_names_in_)
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# Ensure schema is correct (drop and recreate)
+# Ensure schema is correct (drop and recreate for consistency)
 cursor.execute("DROP TABLE IF EXISTS predictions")
 cursor.execute("""
 CREATE TABLE predictions (
@@ -222,6 +222,4 @@ if st.button(T["predict"], key="predict_btn"):
         display_risk(prob)
 
         cursor.execute("""
-            INSERT INTO predictions
-            (name, email, model_used, probability, prediction,
-
+            INSERT INTO

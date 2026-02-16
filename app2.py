@@ -16,7 +16,7 @@ from reportlab.lib.pagesizes import A4
 st.set_page_config(page_title="CKD Prediction System", layout="wide")
 
 # =====================================================
-# SIDEBAR (Language + Model)
+# SIDEBAR
 # =====================================================
 TEXT = {
     "English": {
@@ -36,17 +36,17 @@ TEXT = {
     }
 }
 
-language = st.sidebar.selectbox("🌍 Language", list(TEXT.keys()), key="lang_select")
+language = st.sidebar.selectbox("🌍 Language", list(TEXT.keys()), key="lang")
 model_choice = st.sidebar.radio(
     "🧠 Select Model",
     ["Deep Neural Network (DNN)", "Random Forest"],
-    key="model_select"
+    key="model_choice"
 )
 
 T = TEXT[language]
 
 # =====================================================
-# LOAD MODELS (ORIGINAL SAFE VERSION)
+# LOAD MODELS (UNCHANGED STRUCTURE)
 # =====================================================
 @st.cache_resource
 def load_models():
@@ -59,12 +59,13 @@ dnn_model, rf_model, scaler = load_models()
 FEATURES = list(scaler.feature_names_in_)
 
 # =====================================================
-# DATABASE
+# DATABASE SAFE VERSION
 # =====================================================
 def get_connection():
-    return sqlite3.connect("ckd.db", check_same_thread=False)
+    return sqlite3.connect("ckd.db")
 
 conn = get_connection()
+
 conn.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,13 +85,13 @@ conn.commit()
 st.title(T["title"])
 
 st.subheader("Patient Information")
-name = st.text_input("Full Name", key="patient_name")
-email = st.text_input("Email", key="patient_email")
+name = st.text_input("Full Name", key="name")
+email = st.text_input("Email", key="email")
 
 st.subheader("Medical Test Results")
 
 # =====================================================
-# USER INPUT WITH UNIQUE KEYS
+# USER INPUT (ALL UNIQUE KEYS)
 # =====================================================
 def user_input():
     return pd.DataFrame([{
@@ -123,7 +124,7 @@ def user_input():
 df = user_input()
 
 # =====================================================
-# ENCODING
+# SAFE ENCODING
 # =====================================================
 binary_map = {
     "normal": 0, "abnormal": 1,
@@ -134,53 +135,102 @@ binary_map = {
 
 for col in df.columns:
     if df[col].dtype == object:
-        df[col] = df[col].map(binary_map)
+        df[col] = df[col].astype(str).str.lower().map(binary_map)
+
+df = df.fillna(0)
 
 df = df.reindex(columns=FEATURES)
 df_scaled = scaler.transform(df)
 
 # =====================================================
-# RISK SCALE DISPLAY
+# RISK DISPLAY
 # =====================================================
 def display_risk(prob):
     if prob < 0.25:
-        color, label = "green", "LOW RISK"
+        color, label = "#2ecc71", "LOW RISK"
     elif prob < 0.5:
-        color, label = "yellow", "MODERATE RISK"
+        color, label = "#f1c40f", "MODERATE RISK"
     elif prob < 0.75:
-        color, label = "orange", "HIGH RISK"
+        color, label = "#e67e22", "HIGH RISK"
     else:
-        color, label = "red", "CRITICAL RISK"
+        color, label = "#e74c3c", "CRITICAL RISK"
 
     st.markdown(f"""
-    <div style="padding:15px;border-radius:10px;
-                background-color:{color};
-                text-align:center;
-                font-size:22px;
-                font-weight:bold;">
-        {label} — {prob:.2%}
-    </div>
+        <div style="
+            padding:20px;
+            border-radius:12px;
+            background-color:{color};
+            text-align:center;
+            font-size:22px;
+            font-weight:bold;
+            color:white;">
+            {label} — {prob:.2%}
+        </div>
     """, unsafe_allow_html=True)
+
+# =====================================================
+# PDF GENERATION
+# =====================================================
+def generate_pdf(name, probability, prediction):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("CKD Prediction Report", styles["Title"]))
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph(f"Patient Name: {name}", styles["Normal"]))
+    elements.append(Paragraph(f"Probability: {probability:.2%}", styles["Normal"]))
+    elements.append(Paragraph(f"Prediction: {'CKD Detected' if prediction == 1 else 'No CKD'}", styles["Normal"]))
+    elements.append(Paragraph(f"Generated: {datetime.now()}", styles["Normal"]))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 # =====================================================
 # PREDICTION
 # =====================================================
-if st.button(T["predict"], key="predict_button"):
+if st.button(T["predict"], key="predict_btn"):
 
-    if model_choice == "Deep Neural Network (DNN)":
-        prob = float(dnn_model.predict(df_scaled)[0][0])
-        pred = 1 if prob > 0.5 else 0
-    else:
-        prob = float(rf_model.predict_proba(df_scaled)[0][1])
-        pred = rf_model.predict(df_scaled)[0]
+    try:
+        if model_choice == "Deep Neural Network (DNN)":
+            prob = float(dnn_model.predict(df_scaled)[0][0])
+            pred = 1 if prob > 0.5 else 0
+        else:
+            prob = float(rf_model.predict_proba(df_scaled)[0][1])
+            pred = int(rf_model.predict(df_scaled)[0])
 
-    display_risk(prob)
+        if np.isnan(prob):
+            st.error("Model returned invalid probability.")
+            st.stop()
 
-    conn.execute("""
-        INSERT INTO predictions
-        (name, email, model_used, probability, prediction, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (name, email, model_choice, prob, int(pred), datetime.now().isoformat()))
-    conn.commit()
+        display_risk(prob)
 
-    st.success("Prediction saved to database.")
+        conn.execute("""
+            INSERT INTO predictions
+            (name, email, model_used, probability, prediction, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            name,
+            email,
+            model_choice,
+            float(prob),
+            int(pred),
+            datetime.now().isoformat()
+        ))
+        conn.commit()
+
+        st.success("Prediction saved successfully.")
+
+        pdf = generate_pdf(name, prob, pred)
+
+        st.download_button(
+            T["download"],
+            pdf,
+            file_name="CKD_Report.pdf",
+            mime="application/pdf"
+        )
+
+    except Exception as e:
+        st.error(f"System error: {str(e)}")

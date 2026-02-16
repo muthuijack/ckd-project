@@ -1,6 +1,3 @@
-The syntax error you hit (`SyntaxError: expected 'except' or 'finally' block`) happened because the `try:` block wasn’t properly closed — you left a dangling `cursor.execute` line without finishing the statement. Let me give you the **fully corrected version** of your app code, with the database schema fixed and the prediction logic complete:
-
-```python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -227,3 +224,4 @@ if st.button(T["predict"], key="predict_btn"):
         cursor.execute("""
             INSERT INTO predictions
             (name, email, model_used, probability, prediction,
+

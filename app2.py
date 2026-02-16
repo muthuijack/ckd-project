@@ -6,6 +6,226 @@ import joblib
 import sqlite3
 from datetime import datetime
 from io import BytesIO
+from tensorflow.keras.models import load_model
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+
+# =====================================================
+# PAGE CONFIG
+# =====================================================
+st.set_page_config(
+    page_title="CKD Prediction System",
+    page_icon="🩺",
+    layout="wide"
+)
+
+# =====================================================
+# LANGUAGE
+# =====================================================
+TEXT = {
+    "English": {
+        "title": "🩺 Chronic Kidney Disease Prediction System",
+        "predict": "🔍 Predict CKD",
+        "ckd": "⚠️ CKD Detected",
+        "no_ckd": "✅ No CKD Detected",
+        "download": "📄 Download PDF Report",
+        "danger": "Risk Level"
+    }
+}
+
+language = st.sidebar.selectbox("🌍 Language", list(TEXT.keys()))
+T = TEXT[language]
+
+# =====================================================
+# 🔒 LOAD MODELS (UNCHANGED ORIGINAL SAFE VERSION)
+# =====================================================
+@st.cache_resource
+def load_models():
+    dnn = load_model("ckd_dnn_model.keras")
+    rf = joblib.load("ckd_random_forest.pkl")
+    scaler = joblib.load("scaler.pkl")
+    return dnn, rf, scaler
+
+dnn_model, rf_model, scaler = load_models()
+
+FEATURES = list(scaler.feature_names_in_)
+
+# =====================================================
+# DATABASE
+# =====================================================
+def get_connection():
+    return sqlite3.connect("ckd.db", check_same_thread=False)
+
+def create_tables():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS predictions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT,
+        model_used TEXT,
+        probability REAL,
+        prediction INTEGER,
+        created_at TEXT
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+create_tables()
+
+# =====================================================
+# UI
+# =====================================================
+st.title(T["title"])
+
+model_choice = st.radio(
+    "Select Model",
+    ["Deep Neural Network (DNN)", "Random Forest"]
+)
+
+name = st.text_input("Full Name")
+email = st.text_input("Email")
+
+st.subheader("Medical Test Results")
+
+def user_input():
+    return pd.DataFrame([{
+        "age": st.number_input("Age", 1, 120, 45),
+        "bp": st.number_input("Blood Pressure", 50, 200, 80),
+        "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
+        "al": st.selectbox("Albumin", [0,1,2,3,4,5]),
+        "su": st.selectbox("Sugar", [0,1,2,3,4,5]),
+        "rbc": st.selectbox("Red Blood Cells", ["normal","abnormal"]),
+        "pc": st.selectbox("Pus Cell", ["normal","abnormal"]),
+        "pcc": st.selectbox("Pus Cell Clumps", ["notpresent","present"]),
+        "ba": st.selectbox("Bacteria", ["notpresent","present"]),
+        "bgr": st.number_input("Blood Glucose Random", 50, 500, 120),
+        "bu": st.number_input("Blood Urea", 1, 400, 40),
+        "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
+        "sod": st.number_input("Sodium", 100, 200, 135),
+        "pot": st.number_input("Potassium", 2.0, 10.0, 4.5),
+        "hemo": st.number_input("Hemoglobin", 3.0, 20.0, 13.5),
+        "pcv": st.number_input("Packed Cell Volume", 10, 60, 40),
+        "wc": st.number_input("White Blood Cell Count", 3000, 20000, 8000),
+        "rc": st.number_input("Red Blood Cell Count", 2.0, 8.0, 4.5),
+        "htn": st.selectbox("Hypertension", ["no","yes"]),
+        "dm": st.selectbox("Diabetes Mellitus", ["no","yes"]),
+        "cad": st.selectbox("Coronary Artery Disease", ["no","yes"]),
+        "appet": st.selectbox("Appetite", ["good","poor"]),
+        "pe": st.selectbox("Pedal Edema", ["no","yes"]),
+        "ane": st.selectbox("Anemia", ["no","yes"])
+    }])
+
+df = user_input()
+
+binary_map = {
+    "normal": 0, "abnormal": 1,
+    "no": 0, "yes": 1,
+    "notpresent": 0, "present": 1,
+    "good": 0, "poor": 1
+}
+
+for col in df.columns:
+    if df[col].dtype == object:
+        df[col] = df[col].map(binary_map)
+
+df = df.reindex(columns=FEATURES)
+df_scaled = scaler.transform(df)
+
+# =====================================================
+# RISK SCALE FUNCTION
+# =====================================================
+def display_risk(prob):
+    if prob < 0.25:
+        color = "green"
+        label = "LOW RISK"
+    elif prob < 0.5:
+        color = "yellow"
+        label = "MODERATE RISK"
+    elif prob < 0.75:
+        color = "orange"
+        label = "HIGH RISK"
+    else:
+        color = "red"
+        label = "CRITICAL RISK"
+
+    st.markdown(f"""
+    <div style="
+        padding:15px;
+        border-radius:10px;
+        background-color:{color};
+        text-align:center;
+        font-size:20px;
+        font-weight:bold;
+        color:black;">
+        {label} — {prob:.2%}
+    </div>
+    """, unsafe_allow_html=True)
+
+# =====================================================
+# PDF
+# =====================================================
+def generate_pdf(prob, pred, model_name):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("<b>CKD Prediction Report</b>", styles["Title"]))
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph(f"Model Used: {model_name}", styles["Normal"]))
+    elements.append(Paragraph(f"Probability: {prob:.2%}", styles["Normal"]))
+    elements.append(Paragraph(f"Prediction: {'CKD' if pred else 'No CKD'}", styles["Normal"]))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# =====================================================
+# PREDICTION
+# =====================================================
+if st.button(T["predict"]):
+
+    if model_choice == "Deep Neural Network (DNN)":
+        prob = float(dnn_model.predict(df_scaled)[0][0])
+        pred = 1 if prob > 0.5 else 0
+    else:
+        prob = float(rf_model.predict_proba(df_scaled)[0][1])
+        pred = rf_model.predict(df_scaled)[0]
+
+    display_risk(prob)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO predictions
+        (name, email, model_used, probability, prediction, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, email, model_choice, prob, int(pred), datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+    pdf = generate_pdf(prob, pred, model_choice)
+
+    st.download_button(
+        T["download"],
+        data=pdf,
+        file_name="ckd_report.pdf",
+        mime="application/pdf"
+    )
+import os
+import streamlit as st
+import numpy as np
+import pandas as pd
+import joblib
+import sqlite3
+from datetime import datetime
+from io import BytesIO
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
@@ -308,4 +528,5 @@ if not data.empty:
 
 else:
     st.info("No records yet.")
+
 

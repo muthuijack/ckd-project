@@ -88,8 +88,8 @@ model_choice = st.radio(
     ["Deep Neural Network (DNN)", "Random Forest"]
 )
 
-name = st.text_input("Full Name")
-email = st.text_input("Email")
+name = st.text_input("Full Name", key="patient_name")
+email = st.text_input("Email", key="patient_email")
 
 st.subheader("Medical Test Results")
 
@@ -528,5 +528,6 @@ if not data.empty:
 
 else:
     st.info("No records yet.")
+
 
 

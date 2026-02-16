@@ -46,7 +46,7 @@ model_choice = st.sidebar.radio(
 T = TEXT[language]
 
 # =====================================================
-# LOAD MODELS (UNCHANGED STRUCTURE)
+# LOAD MODELS
 # =====================================================
 @st.cache_resource
 def load_models():
@@ -62,9 +62,12 @@ FEATURES = list(scaler.feature_names_in_)
 # DATABASE
 # =====================================================
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
+cursor = conn.cursor()
 
-conn.execute("""
-CREATE TABLE IF NOT EXISTS predictions (
+# Drop and recreate table to guarantee correct schema
+cursor.execute("DROP TABLE IF EXISTS predictions")
+cursor.execute("""
+CREATE TABLE predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     email TEXT,
@@ -88,7 +91,7 @@ email = st.text_input("Email", key="email")
 st.subheader("Medical Test Results")
 
 # =====================================================
-# INPUT FORM (MATCHES TRAINING FEATURES)
+# INPUT FORM
 # =====================================================
 def user_input():
     return pd.DataFrame([{
@@ -137,18 +140,12 @@ for col in df.columns:
 df = df.fillna(0)
 
 # =====================================================
-# SAFE FEATURE ALIGNMENT (NO MORE KEYERROR)
+# FEATURE ALIGNMENT
 # =====================================================
 df_aligned = pd.DataFrame(columns=FEATURES)
-
 for col in FEATURES:
-    if col in df.columns:
-        df_aligned[col] = df[col]
-    else:
-        df_aligned[col] = 0
-
-df = df_aligned
-df = df.apply(pd.to_numeric)
+    df_aligned[col] = df[col] if col in df.columns else 0
+df = df_aligned.apply(pd.to_numeric)
 
 if df.isnull().values.any():
     st.error("Invalid input detected.")
@@ -210,7 +207,6 @@ def generate_pdf(name, probability, prediction):
 # PREDICTION
 # =====================================================
 if st.button(T["predict"], key="predict_btn"):
-
     try:
         if model_choice == "Deep Neural Network (DNN)":
             prob = float(dnn_model.predict(df_scaled, verbose=0)[0][0])
@@ -225,30 +221,4 @@ if st.button(T["predict"], key="predict_btn"):
 
         display_risk(prob)
 
-        conn.execute("""
-            INSERT INTO predictions
-            (name, email, model_used, probability, prediction, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            name,
-            email,
-            model_choice,
-            float(prob),
-            int(pred),
-            datetime.now().isoformat()
-        ))
-        conn.commit()
-
-        st.success("Prediction saved successfully.")
-
-        pdf = generate_pdf(name, prob, pred)
-
-        st.download_button(
-            T["download"],
-            pdf,
-            file_name="CKD_Report.pdf",
-            mime="application/pdf"
-        )
-
-    except Exception as e:
-        st.error(f"System error: {str(e)}")
+        cursor.execute

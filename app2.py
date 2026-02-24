@@ -9,16 +9,15 @@ from io import BytesIO
 from tensorflow.keras.models import load_model
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import A4
 
-# =====================================================
+# =========================================
 # PAGE CONFIG
-# =====================================================
+# =========================================
 st.set_page_config(page_title="CKD System", layout="wide")
 
-# =====================================================
-# DATABASE SETUP
-# =====================================================
+# =========================================
+# DATABASE
+# =========================================
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
 
 conn.execute("""
@@ -43,33 +42,33 @@ CREATE TABLE IF NOT EXISTS predictions (
 
 conn.commit()
 
-# =====================================================
-# PASSWORD HASHING
-# =====================================================
+# =========================================
+# PASSWORD HASH
+# =========================================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# =====================================================
-# SESSION STATE
-# =====================================================
+# =========================================
+# SESSION
+# =========================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.role = None
     st.session_state.username = None
+    st.session_state.role = None
 
-# =====================================================
-# LOGIN / REGISTER PAGE
-# =====================================================
+# =========================================
+# LOGIN PAGE
+# =========================================
 def login_page():
     st.title("🔐 CKD System Login")
 
-    menu = st.radio("Select Option", ["Login", "Register"])
+    menu = st.radio("Choose", ["Login", "Register"])
 
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
     if menu == "Register":
-        role = st.selectbox("Register As", ["doctor", "patient"])
+        role = st.selectbox("Register as", ["patient", "doctor"])
 
         if st.button("Register"):
             try:
@@ -78,7 +77,7 @@ def login_page():
                     (username, hash_password(password), role)
                 )
                 conn.commit()
-                st.success("User registered successfully.")
+                st.success("Registered successfully.")
             except:
                 st.error("Username already exists.")
 
@@ -91,16 +90,15 @@ def login_page():
 
             if user:
                 st.session_state.logged_in = True
-                st.session_state.role = user[3]
                 st.session_state.username = user[1]
-                st.success("Login successful.")
+                st.session_state.role = user[3]
                 st.rerun()
             else:
-                st.error("Invalid credentials.")
+                st.error("Invalid credentials")
 
-# =====================================================
+# =========================================
 # LOAD MODELS
-# =====================================================
+# =========================================
 @st.cache_resource
 def load_models():
     dnn = load_model("ckd_dnn_model.keras")
@@ -111,9 +109,9 @@ def load_models():
 dnn_model, rf_model, scaler = load_models()
 FEATURES = list(scaler.feature_names_in_)
 
-# =====================================================
-# PDF GENERATION
-# =====================================================
+# =========================================
+# PDF
+# =========================================
 def generate_pdf(username, probability, prediction):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer)
@@ -131,67 +129,36 @@ def generate_pdf(username, probability, prediction):
     buffer.seek(0)
     return buffer
 
-# =====================================================
-# CKD PREDICTION PAGE
-# =====================================================
-def prediction_page():
+# =========================================
+# PATIENT PAGE (Prediction ONLY)
+# =========================================
+def patient_page():
 
-    st.sidebar.write(f"Logged in as: {st.session_state.username} ({st.session_state.role})")
+    st.title("🧑‍🦱 Patient CKD Prediction")
 
-    if st.sidebar.button("Logout"):
+    if st.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
 
-    st.title("🩺 CKD Prediction")
-
-    model_choice = st.sidebar.radio(
+    model_choice = st.radio(
         "Select Model",
         ["Deep Neural Network (DNN)", "Random Forest"]
     )
 
-    def user_input():
-        return pd.DataFrame([{
-            "age": st.number_input("Age", 1, 120, 45),
-            "bp": st.number_input("Blood Pressure", 50, 200, 80),
-            "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
-            "al": st.selectbox("Albumin", [0,1,2,3,4,5]),
-            "su": st.selectbox("Sugar", [0,1,2,3,4,5]),
-            "rbc": st.selectbox("Red Blood Cells", ["normal","abnormal"]),
-            "pc": st.selectbox("Pus Cell", ["normal","abnormal"]),
-            "pcc": st.selectbox("Pus Cell Clumps", ["notpresent","present"]),
-            "ba": st.selectbox("Bacteria", ["notpresent","present"]),
-            "bgr": st.number_input("Blood Glucose Random", 50, 500, 120),
-            "bu": st.number_input("Blood Urea", 1, 400, 40),
-            "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
-            "sod": st.number_input("Sodium", 100, 200, 135),
-            "pot": st.number_input("Potassium", 2.0, 10.0, 4.5),
-            "hemo": st.number_input("Hemoglobin", 3.0, 20.0, 13.5),
-            "pcv": st.number_input("Packed Cell Volume", 10, 60, 40),
-            "wc": st.number_input("White Blood Cell Count", 3000, 20000, 8000),
-            "rc": st.number_input("Red Blood Cell Count", 2.0, 8.0, 4.5),
-            "htn": st.selectbox("Hypertension", ["no","yes"]),
-            "dm": st.selectbox("Diabetes Mellitus", ["no","yes"]),
-            "cad": st.selectbox("Coronary Artery Disease", ["no","yes"]),
-            "appet": st.selectbox("Appetite", ["good","poor"]),
-            "pe": st.selectbox("Pedal Edema", ["no","yes"]),
-            "ane": st.selectbox("Anemia", ["no","yes"])
-        }])
+    # Input form
+    df = pd.DataFrame([{
+        "age": st.number_input("Age", 1, 120, 45),
+        "bp": st.number_input("Blood Pressure", 50, 200, 80),
+        "sg": st.selectbox("Specific Gravity", [1.005,1.010,1.015,1.020,1.025]),
+        "al": st.selectbox("Albumin", [0,1,2,3,4,5]),
+        "su": st.selectbox("Sugar", [0,1,2,3,4,5]),
+        "bgr": st.number_input("Blood Glucose Random", 50, 500, 120),
+        "bu": st.number_input("Blood Urea", 1, 400, 40),
+        "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
+        "hemo": st.number_input("Hemoglobin", 3.0, 20.0, 13.5)
+    }])
 
-    df = user_input()
-
-    binary_map = {
-        "normal": 0, "abnormal": 1,
-        "no": 0, "yes": 1,
-        "notpresent": 0, "present": 1,
-        "good": 0, "poor": 1
-    }
-
-    for col in df.columns:
-        if df[col].dtype == object:
-            df[col] = df[col].map(binary_map)
-
-    df = df.fillna(0)
-
+    # Align features safely
     df_aligned = pd.DataFrame(columns=FEATURES)
     for col in FEATURES:
         df_aligned[col] = df[col] if col in df.columns else 0
@@ -223,22 +190,39 @@ def prediction_page():
         pdf = generate_pdf(st.session_state.username, prob, pred)
 
         st.download_button(
-            "Download PDF Report",
+            "Download Report",
             pdf,
             file_name="CKD_Report.pdf",
             mime="application/pdf"
         )
 
-    # Doctor view all predictions
-    if st.session_state.role == "doctor":
-        st.subheader("📊 All Patient Predictions")
-        data = pd.read_sql("SELECT * FROM predictions", conn)
+# =========================================
+# DOCTOR PAGE (VIEW ONLY)
+# =========================================
+def doctor_page():
+
+    st.title("👩‍⚕️ Doctor Dashboard")
+
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+    st.subheader("All Patient Predictions")
+
+    data = pd.read_sql("SELECT * FROM predictions ORDER BY created_at DESC", conn)
+
+    if data.empty:
+        st.info("No predictions yet.")
+    else:
         st.dataframe(data)
 
-# =====================================================
-# MAIN ROUTER
-# =====================================================
+# =========================================
+# ROUTER
+# =========================================
 if not st.session_state.logged_in:
     login_page()
 else:
-    prediction_page()
+    if st.session_state.role == "patient":
+        patient_page()
+    elif st.session_state.role == "doctor":
+        doctor_page()

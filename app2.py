@@ -1,50 +1,24 @@
 import streamlit as st
-import pandas as pd
-import joblib
 import sqlite3
-import hashlib
+import pandas as pd
+import numpy as np
+import pickle
 from datetime import datetime
-from io import BytesIO
-from tensorflow.keras.models import load_model
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+
+st.set_page_config(page_title="CKD Prediction System", layout="wide")
 
 # =====================================================
-# PAGE CONFIG
+# LOAD MODEL (UNCHANGED STRUCTURE)
 # =====================================================
-st.set_page_config(
-    page_title="CKD Hospital System",
-    layout="wide",
-    page_icon="🏥"
-)
+model = pickle.load(open("ckd_model.pkl", "rb"))
 
 # =====================================================
-# CUSTOM THEME STYLE
-# =====================================================
-st.markdown("""
-<style>
-.main {background-color: #f5f7fa;}
-.sidebar .sidebar-content {background-color: #0e1117;}
-h1, h2, h3 {color: #0e1117;}
-.stButton>button {
-    background-color: #0066cc;
-    color: white;
-    border-radius: 8px;
-    height: 3em;
-    width: 100%;
-}
-.stButton>button:hover {
-    background-color: #004999;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# =====================================================
-# DATABASE
+# DATABASE SETUP (AUTO SAFE)
 # =====================================================
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
+cursor = conn.cursor()
 
-conn.execute("""
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE,
@@ -53,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-conn.execute("""
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT,
@@ -67,194 +41,123 @@ CREATE TABLE IF NOT EXISTS predictions (
 conn.commit()
 
 # =====================================================
-# PASSWORD HASH
+# SIDEBAR STYLE
 # =====================================================
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+st.markdown("""
+<style>
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f2027, #203a43, #2c5364);
+    color: white;
+}
+.big-title {
+    font-size:30px;
+    font-weight:bold;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
-# SESSION
+# AUTH FUNCTIONS
 # =====================================================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = None
-    st.session_state.role = None
+def login(username, password):
+    user = cursor.execute(
+        "SELECT * FROM users WHERE username=? AND password=?",
+        (username, password)
+    ).fetchone()
+    return user
+
+def register(username, password, role):
+    try:
+        cursor.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            (username, password, role)
+        )
+        conn.commit()
+        return True
+    except:
+        return False
 
 # =====================================================
-# LOAD MODELS
+# DANGER SCALE FUNCTION
 # =====================================================
-@st.cache_resource
-def load_models():
-    dnn = load_model("ckd_dnn_model.keras")
-    rf = joblib.load("ckd_random_forest.pkl")
-    scaler = joblib.load("scaler.pkl")
-    return dnn, rf, scaler
-
-dnn_model, rf_model, scaler = load_models()
-FEATURES = list(scaler.feature_names_in_)
-
-# =====================================================
-# DANGER METER FUNCTION
-# =====================================================
-def show_danger_meter(prob):
-
-    percent = prob * 100
-
-    if percent < 30:
-        color = "🟢 Low Risk"
-    elif percent < 70:
-        color = "🟡 Moderate Risk"
+def danger_scale(prob):
+    if prob < 0.33:
+        color = "green"
+        label = "LOW RISK"
+    elif prob < 0.66:
+        color = "orange"
+        label = "MODERATE RISK"
     else:
-        color = "🔴 High Risk"
+        color = "red"
+        label = "HIGH RISK"
 
-    st.subheader("Risk Level")
-    st.progress(percent / 100)
-    st.metric("CKD Probability", f"{percent:.2f}%")
-    st.markdown(f"### {color}")
-
-# =====================================================
-# PDF
-# =====================================================
-def generate_pdf(username, probability, prediction):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer)
-    styles = getSampleStyleSheet()
-    elements = []
-
-    elements.append(Paragraph("CKD Prediction Report", styles["Title"]))
-    elements.append(Spacer(1, 12))
-    elements.append(Paragraph(f"Patient: {username}", styles["Normal"]))
-    elements.append(Paragraph(f"Probability: {probability:.2%}", styles["Normal"]))
-    elements.append(Paragraph(
-        f"Result: {'CKD Detected' if prediction==1 else 'No CKD'}",
-        styles["Normal"]
-    ))
-    elements.append(Paragraph(f"Date: {datetime.now()}", styles["Normal"]))
-
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-# =====================================================
-# LOGIN PAGE
-# =====================================================
-def login_page():
-    st.title("🏥 CKD Hospital Login System")
-
-    menu = st.radio("Select Option", ["Login", "Register"])
-
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if menu == "Register":
-        role = st.selectbox("Register as", ["patient", "doctor"])
-        if st.button("Register"):
-            try:
-                conn.execute(
-                    "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                    (username, hash_password(password), role)
-                )
-                conn.commit()
-                st.success("Registered successfully.")
-            except:
-                st.error("Username already exists.")
-
-    if menu == "Login":
-        if st.button("Login"):
-            user = conn.execute(
-                "SELECT * FROM users WHERE username=? AND password=?",
-                (username, hash_password(password))
-            ).fetchone()
-
-            if user:
-                st.session_state.logged_in = True
-                st.session_state.username = user[1]
-                st.session_state.role = user[3]
-                st.rerun()
-            else:
-                st.error("Invalid credentials.")
+    st.markdown(f"""
+    <div style="padding:20px;border-radius:10px;background-color:{color};
+                color:white;text-align:center;font-size:20px;">
+        {label} <br> {prob*100:.2f}% probability
+    </div>
+    """, unsafe_allow_html=True)
 
 # =====================================================
 # PATIENT PAGE
 # =====================================================
 def patient_page():
 
-    st.sidebar.title("🧑 Patient Panel")
-    st.sidebar.write(f"Welcome {st.session_state.username}")
+    st.title("Patient Prediction Dashboard")
 
-    model_choice = st.sidebar.radio(
-        "Model Selection",
-        ["Deep Neural Network (DNN)", "Random Forest"]
-    )
+    age = st.number_input("Age", 1, 120)
+    bp = st.number_input("Blood Pressure")
+    sg = st.number_input("Specific Gravity")
+    al = st.number_input("Albumin")
+    su = st.number_input("Sugar")
 
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
+    if st.button("Predict CKD"):
 
-    st.title("🩺 CKD Prediction Form")
+        input_data = np.array([[age, bp, sg, al, su]])
 
-    df = pd.DataFrame([{
-        "age": st.number_input("Age", 1, 120, 45),
-        "bp": st.number_input("Blood Pressure", 50, 200, 80),
-        "bgr": st.number_input("Blood Glucose", 50, 500, 120),
-        "bu": st.number_input("Blood Urea", 1, 400, 40),
-        "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
-        "hemo": st.number_input("Hemoglobin", 3.0, 20.0, 13.5)
-    }])
+        try:
+            prob = float(model.predict_proba(input_data)[0][1])
+        except:
+            prob = float(model.predict(input_data)[0])
 
-    df_aligned = pd.DataFrame(0, index=[0], columns=FEATURES)
-    for col in df.columns:
-        if col in FEATURES:
-            df_aligned[col] = df[col]
+        prob = max(0.0, min(1.0, prob))
 
-    df_scaled = scaler.transform(df_aligned)
+        prediction = 1 if prob > 0.5 else 0
 
-    if st.button("Predict"):
+        danger_scale(prob)
 
-        if model_choice == "Deep Neural Network (DNN)":
-            prob = float(dnn_model.predict(df_scaled, verbose=0)[0][0])
-            pred = 1 if prob > 0.5 else 0
-        else:
-            prob = float(rf_model.predict_proba(df_scaled)[0][1])
-            pred = int(rf_model.predict(df_scaled)[0])
-
-        show_danger_meter(prob)
-
-        conn.execute("""
-            INSERT INTO predictions
-            (username, model_used, probability, prediction, created_at)
-            VALUES (?, ?, ?, ?, ?)
+        cursor.execute("""
+        INSERT INTO predictions (username, model_used, probability, prediction, created_at)
+        VALUES (?, ?, ?, ?, ?)
         """, (
             st.session_state.username,
-            model_choice,
+            "CKD Model",
             prob,
-            pred,
+            prediction,
             datetime.now().isoformat()
         ))
         conn.commit()
 
-        pdf = generate_pdf(st.session_state.username, prob, pred)
+    st.subheader("Your Prediction History")
 
-        st.download_button(
-            "Download Medical Report",
-            pdf,
-            file_name="CKD_Report.pdf",
-            mime="application/pdf"
-        )
+    data = pd.read_sql("""
+        SELECT probability, prediction, created_at
+        FROM predictions
+        WHERE username=?
+        ORDER BY created_at DESC
+    """, conn, params=(st.session_state.username,))
+
+    if not data.empty:
+        st.dataframe(data)
+    else:
+        st.info("No predictions yet.")
 
 # =====================================================
 # DOCTOR PAGE
 # =====================================================
 def doctor_page():
 
-    st.sidebar.title("👩‍⚕️ Doctor Dashboard")
-    st.sidebar.write(f"Dr. {st.session_state.username}")
-
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
-
-    st.title("📊 Patient Prediction Records")
+    st.title("Doctor Dashboard")
 
     data = pd.read_sql("""
         SELECT username, model_used, probability, prediction, created_at
@@ -263,16 +166,59 @@ def doctor_page():
     """, conn)
 
     if data.empty:
-        st.info("No patient records yet.")
-    else:
-        st.dataframe(data, use_container_width=True)
+        st.info("No patient records available.")
+        return
+
+    st.dataframe(data)
+
+    st.subheader("CKD Risk Distribution")
+
+    st.bar_chart(data["probability"])
 
 # =====================================================
-# ROUTER
+# MAIN APP FLOW
 # =====================================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
 if not st.session_state.logged_in:
-    login_page()
+
+    st.title("CKD Prediction Login")
+
+    option = st.selectbox("Select Option", ["Login", "Register"])
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if option == "Register":
+        role = st.selectbox("Role", ["patient", "doctor"])
+        if st.button("Register"):
+            if register(username, password, role):
+                st.success("Registered successfully!")
+            else:
+                st.error("Username already exists.")
+
+    else:
+        if st.button("Login"):
+            user = login(username, password)
+            if user:
+                st.session_state.logged_in = True
+                st.session_state.username = user[1]
+                st.session_state.role = user[3]
+                st.success("Login successful")
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
+
 else:
+
+    st.sidebar.markdown(f"### Welcome {st.session_state.username}")
+    st.sidebar.write("Role:", st.session_state.role)
+
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
     if st.session_state.role == "patient":
         patient_page()
     else:

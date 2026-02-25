@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
 import sqlite3
 import hashlib
@@ -124,21 +125,41 @@ dnn_model, rf_model, scaler = load_models()
 # =====================================================
 # DANGER METER
 # =====================================================
+
 def show_danger(prob):
 
     percent = prob * 100
 
     if percent < 30:
-        label = "🟢 LOW RISK"
+        label = "LOW RISK"
+        color = "green"
     elif percent < 70:
-        label = "🟡 MODERATE RISK"
+        label = "MODERATE RISK"
+        color = "orange"
     else:
-        label = "🔴 HIGH RISK"
+        label = "HIGH RISK"
+        color = "red"
 
-    st.progress(percent/100)
-    st.metric("CKD Probability", f"{percent:.2f}%")
-    st.markdown(f"### {label}")
+    st.subheader("🩺 CKD Severity Analysis")
 
+    # Create figure
+    fig, ax = plt.subplots()
+
+    # Severity zones
+    ax.barh(["Low (0-30%)"], [30])
+    ax.barh(["Moderate (30-70%)"], [70])
+    ax.barh(["High (70-100%)"], [100])
+
+    # Patient marker
+    ax.scatter(percent, 1, s=200)
+
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("CKD Probability (%)")
+
+    st.pyplot(fig)
+
+    st.metric("Predicted Risk", f"{percent:.2f}%")
+    st.markdown(f"### 🚨 Status: **{label}**")
 # =====================================================
 # PDF REPORT
 # =====================================================
@@ -323,4 +344,5 @@ else:
         patient_page()
     else:
         doctor_page()
+
 

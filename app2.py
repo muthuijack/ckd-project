@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 import sqlite3
 import hashlib
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
 from io import BytesIO
 import joblib
 from tensorflow.keras.models import load_model
@@ -15,54 +15,28 @@ from reportlab.lib.styles import getSampleStyleSheet
 # =====================================================
 # PAGE CONFIG
 # =====================================================
-st.set_page_config(
-    page_title="CKD Hospital System",
-    layout="wide",
-    page_icon="🏥"
-)
+st.set_page_config(page_title="AI CKD Clinical System",
+                   layout="wide",
+                   page_icon="🏥")
 
 # =====================================================
-# STYLING
+# PROFESSIONAL SIDEBAR STYLE
 # =====================================================
 st.markdown("""
 <style>
-
-/* Sidebar Background */
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0f2027, #203a43, #2c5364);
 }
-
-/* Sidebar Text */
 [data-testid="stSidebar"] * {
     color: white !important;
 }
-
-/* Radio buttons text */
-.stRadio > label {
-    color: white !important;
-}
-
-/* Selectbox text */
-.stSelectbox label {
-    color: white !important;
-}
-
-/* Sidebar title */
-[data-testid="stSidebar"] h1, 
-[data-testid="stSidebar"] h2, 
-[data-testid="stSidebar"] h3 {
-    color: white !important;
-}
-
-/* Buttons */
-.stButton > button {
+.stButton>button {
     background-color: #0066cc;
     color: white;
     border-radius: 8px;
     height: 3em;
     width: 100%;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,21 +48,21 @@ cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT,
-    role TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+username TEXT UNIQUE,
+password TEXT,
+role TEXT
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT,
-    model_used TEXT,
-    probability REAL,
-    prediction INTEGER,
-    created_at TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+username TEXT,
+model_used TEXT,
+probability REAL,
+prediction INTEGER,
+created_at TEXT
 )
 """)
 
@@ -104,76 +78,98 @@ def hash_password(password):
 # SAFE MODEL LOADING
 # =====================================================
 def load_models():
-
-    dnn_model = None
-    rf_model = None
-    scaler = None
+    dnn, rf, scaler = None, None, None
 
     if os.path.exists("ckd_dnn_model.keras"):
-        dnn_model = load_model("ckd_dnn_model.keras")
+        dnn = load_model("ckd_dnn_model.keras")
 
     if os.path.exists("ckd_random_forest.pkl"):
-        rf_model = joblib.load("ckd_random_forest.pkl")
+        rf = joblib.load("ckd_random_forest.pkl")
 
     if os.path.exists("scaler.pkl"):
         scaler = joblib.load("scaler.pkl")
 
-    return dnn_model, rf_model, scaler
+    return dnn, rf, scaler
 
 dnn_model, rf_model, scaler = load_models()
 
 # =====================================================
-# DANGER METER
+# SEVERITY GRAPH
 # =====================================================
+def show_severity_graph(prob):
+    percent = prob * 100
 
-def show_danger(prob):
+    fig, ax = plt.subplots()
+    ax.axvspan(0, 30)
+    ax.axvspan(30, 70)
+    ax.axvspan(70, 100)
 
+    ax.axvline(percent)
+
+    ax.set_xlim(0, 100)
+    ax.set_yticks([])
+    ax.set_xlabel("CKD Probability (%)")
+    ax.set_title("CKD Severity Scale")
+
+    st.pyplot(fig)
+    st.metric("Predicted Risk", f"{percent:.2f}%")
+
+# =====================================================
+# RECOMMENDATION ENGINE
+# =====================================================
+def medical_recommendation(prob):
     percent = prob * 100
 
     if percent < 30:
-        label = "LOW RISK"
-        color = "green"
+        st.success("🟢 Low Risk: Maintain healthy lifestyle and regular checkups.")
     elif percent < 70:
-        label = "MODERATE RISK"
-        color = "orange"
+        st.warning("🟡 Moderate Risk: Monitor blood pressure & glucose. Consult doctor.")
     else:
-        label = "HIGH RISK"
-        color = "red"
+        st.error("🔴 High Risk: Immediate nephrologist consultation recommended.")
 
-    st.subheader("🩺 CKD Severity Analysis")
+# =====================================================
+# EDUCATION SECTION
+# =====================================================
+def ckd_education():
+    st.markdown("## 🧠 Understanding Chronic Kidney Disease (CKD)")
+    st.markdown("""
+CKD is a long-term condition where kidneys gradually lose their ability to filter waste from the blood.
 
-    # Create figure
-    fig, ax = plt.subplots()
+### 🔍 Major Causes
+- Diabetes
+- High Blood Pressure
+- Cardiovascular disease
+- Genetic factors
+- Long-term medication misuse
 
-    # Severity zones
-    ax.barh(["Low (0-30%)"], [30])
-    ax.barh(["Moderate (30-70%)"], [70])
-    ax.barh(["High (70-100%)"], [100])
+### ⚠️ Symptoms
+- Fatigue
+- Swelling in legs
+- Frequent urination
+- Nausea
+- Shortness of breath
 
-    # Patient marker
-    ax.scatter(percent, 1, s=200)
+### 🛡 Prevention
+- Control blood sugar
+- Control blood pressure
+- Stay hydrated
+- Healthy diet
+- Regular medical screening
+""")
 
-    ax.set_xlim(0, 100)
-    ax.set_xlabel("CKD Probability (%)")
-
-    st.pyplot(fig)
-
-    st.metric("Predicted Risk", f"{percent:.2f}%")
-    st.markdown(f"### 🚨 Status: **{label}**")
 # =====================================================
 # PDF REPORT
 # =====================================================
 def generate_pdf(username, prob, pred):
-
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
     elements = []
 
-    elements.append(Paragraph("CKD Prediction Report", styles["Title"]))
+    elements.append(Paragraph("AI CKD Clinical Report", styles["Title"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Patient: {username}", styles["Normal"]))
-    elements.append(Paragraph(f"Probability: {prob:.2%}", styles["Normal"]))
+    elements.append(Paragraph(f"Risk Probability: {prob:.2%}", styles["Normal"]))
     elements.append(Paragraph(
         f"Result: {'CKD Detected' if pred==1 else 'No CKD'}",
         styles["Normal"]
@@ -191,14 +187,12 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 # =====================================================
-# LOGIN PAGE
+# LOGIN
 # =====================================================
 def login_page():
-
-    st.title("🏥 CKD Hospital Login")
+    st.title("🏥 AI CKD Clinical System")
 
     option = st.radio("Select Option", ["Login", "Register"])
-
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
@@ -206,29 +200,24 @@ def login_page():
         role = st.selectbox("Role", ["patient", "doctor"])
         if st.button("Register"):
             try:
-                cursor.execute(
-                    "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                    (username, hash_password(password), role)
-                )
+                cursor.execute("INSERT INTO users (username,password,role) VALUES (?,?,?)",
+                               (username, hash_password(password), role))
                 conn.commit()
-                st.success("Registered successfully.")
+                st.success("Registered successfully")
             except:
-                st.error("Username already exists.")
+                st.error("Username already exists")
 
     if option == "Login":
         if st.button("Login"):
-            user = cursor.execute(
-                "SELECT * FROM users WHERE username=? AND password=?",
-                (username, hash_password(password))
-            ).fetchone()
-
+            user = cursor.execute("SELECT * FROM users WHERE username=? AND password=?",
+                                  (username, hash_password(password))).fetchone()
             if user:
                 st.session_state.logged_in = True
                 st.session_state.username = user[1]
                 st.session_state.role = user[3]
                 st.rerun()
             else:
-                st.error("Invalid credentials.")
+                st.error("Invalid credentials")
 
 # =====================================================
 # PATIENT PAGE
@@ -236,90 +225,101 @@ def login_page():
 def patient_page():
 
     st.sidebar.title("🧑 Patient Panel")
-    model_choice = st.sidebar.radio(
-        "Model Selection",
-        ["DNN", "Random Forest"]
-    )
+    model_choice = st.sidebar.radio("Model",
+                                    ["DNN", "Random Forest"])
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
 
-    st.title("🩺 CKD Prediction Form")
+    tab1, tab2 = st.tabs(["🩺 Prediction", "📖 Learn About CKD"])
 
-    # FULL FEATURE INPUT
-    df = pd.DataFrame([{
-        "age": st.number_input("Age", 1, 120, 45),
-        "bp": st.number_input("Blood Pressure", 50, 200, 80),
-        "bgr": st.number_input("Blood Glucose", 50, 500, 120),
-        "bu": st.number_input("Blood Urea", 1, 400, 40),
-        "sc": st.number_input("Serum Creatinine", 0.1, 20.0, 1.2),
-        "hemo": st.number_input("Hemoglobin", 3.0, 20.0, 13.5)
-    }])
+    # ===================== PREDICTION TAB =====================
+    with tab1:
 
-    if scaler is None:
-        st.error("Scaler file missing.")
-        return
+        st.header("Enter Clinical Data")
 
-    FEATURES = scaler.feature_names_in_
-    df_aligned = pd.DataFrame(0, index=[0], columns=FEATURES)
+        age = st.number_input("Age", 1, 120, 45)
+        bp = st.number_input("Blood Pressure", 50, 200, 80)
+        bgr = st.number_input("Blood Glucose", 50, 500, 120)
+        bu = st.number_input("Blood Urea", 1, 400, 40)
+        sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.2)
+        hemo = st.number_input("Hemoglobin", 3.0, 20.0, 13.5)
 
-    for col in df.columns:
-        if col in FEATURES:
-            df_aligned[col] = df[col]
+        if st.button("Predict Risk"):
 
-    df_scaled = scaler.transform(df_aligned)
+            if scaler is None:
+                st.error("Scaler missing.")
+                return
 
-    if st.button("Predict"):
+            df = pd.DataFrame([{
+                "age": age,
+                "bp": bp,
+                "bgr": bgr,
+                "bu": bu,
+                "sc": sc,
+                "hemo": hemo
+            }])
 
-        if model_choice == "DNN" and dnn_model is not None:
-            prob = float(dnn_model.predict(df_scaled, verbose=0)[0][0])
-        elif model_choice == "Random Forest" and rf_model is not None:
-            prob = float(rf_model.predict_proba(df_scaled)[0][1])
-        else:
-            st.error("Selected model not available.")
-            return
+            features = scaler.feature_names_in_
+            aligned = pd.DataFrame(0, index=[0], columns=features)
 
-        prob = max(0.0, min(1.0, prob))
-        pred = 1 if prob > 0.5 else 0
+            for col in df.columns:
+                if col in features:
+                    aligned[col] = df[col]
 
-        show_danger(prob)
+            scaled = scaler.transform(aligned)
 
-        cursor.execute("""
-        INSERT INTO predictions
-        (username, model_used, probability, prediction, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """, (
-            st.session_state.username,
-            model_choice,
-            prob,
-            pred,
-            datetime.now().isoformat()
-        ))
+            if model_choice == "DNN" and dnn_model:
+                prob = float(dnn_model.predict(scaled, verbose=0)[0][0])
+            elif model_choice == "Random Forest" and rf_model:
+                prob = float(rf_model.predict_proba(scaled)[0][1])
+            else:
+                st.error("Model not available")
+                return
 
-        conn.commit()
+            prob = max(0, min(1, prob))
+            pred = 1 if prob > 0.5 else 0
 
-        pdf = generate_pdf(st.session_state.username, prob, pred)
+            show_severity_graph(prob)
+            medical_recommendation(prob)
 
-        st.download_button(
-            "Download Report",
-            pdf,
-            file_name="CKD_Report.pdf",
-            mime="application/pdf"
-        )
+            cursor.execute("""
+            INSERT INTO predictions
+            (username,model_used,probability,prediction,created_at)
+            VALUES (?,?,?,?,?)
+            """, (st.session_state.username,
+                  model_choice,
+                  prob,
+                  pred,
+                  datetime.now().isoformat()))
+            conn.commit()
+
+            pdf = generate_pdf(st.session_state.username, prob, pred)
+
+            st.download_button("Download Report",
+                               pdf,
+                               "CKD_Report.pdf",
+                               "application/pdf")
+
+            st.info("⚠ This tool is AI-assisted and not a medical diagnosis.")
+
+    # ===================== EDUCATION TAB =====================
+    with tab2:
+        ckd_education()
 
 # =====================================================
 # DOCTOR PAGE
 # =====================================================
 def doctor_page():
 
-    st.sidebar.title("👩‍⚕️ Doctor Dashboard")
+    st.sidebar.title("👩‍⚕ Doctor Dashboard")
 
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
 
-    st.title("📊 Patient Predictions")
+    st.header("Patient Prediction Records")
 
     data = pd.read_sql("""
         SELECT username, model_used, probability, prediction, created_at
@@ -328,11 +328,17 @@ def doctor_page():
     """, conn)
 
     if data.empty:
-        st.info("No records yet.")
-    else:
-        st.dataframe(data, use_container_width=True)
-        st.subheader("CKD Probability Overview")
-        st.bar_chart(data["probability"])
+        st.info("No patient records yet.")
+        return
+
+    st.dataframe(data, use_container_width=True)
+
+    st.subheader("📊 Risk Distribution")
+    st.bar_chart(data["probability"])
+
+    st.subheader("📈 Risk Trend Over Time")
+    trend = data.sort_values("created_at")
+    st.line_chart(trend["probability"])
 
 # =====================================================
 # ROUTER
@@ -344,5 +350,3 @@ else:
         patient_page()
     else:
         doctor_page()
-
-

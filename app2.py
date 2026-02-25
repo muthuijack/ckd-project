@@ -25,17 +25,43 @@ st.set_page_config(
 # =====================================================
 st.markdown("""
 <style>
+
+/* Sidebar Background */
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0f2027, #203a43, #2c5364);
-    color: white;
 }
-.stButton>button {
+
+/* Sidebar Text */
+[data-testid="stSidebar"] * {
+    color: white !important;
+}
+
+/* Radio buttons text */
+.stRadio > label {
+    color: white !important;
+}
+
+/* Selectbox text */
+.stSelectbox label {
+    color: white !important;
+}
+
+/* Sidebar title */
+[data-testid="stSidebar"] h1, 
+[data-testid="stSidebar"] h2, 
+[data-testid="stSidebar"] h3 {
+    color: white !important;
+}
+
+/* Buttons */
+.stButton > button {
     background-color: #0066cc;
     color: white;
     border-radius: 8px;
     height: 3em;
     width: 100%;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -297,3 +323,4 @@ else:
         patient_page()
     else:
         doctor_page()
+

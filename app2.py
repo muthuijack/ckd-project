@@ -9,52 +9,55 @@ import matplotlib.pyplot as plt
 import joblib
 from tensorflow.keras.models import load_model
 
-# =============================
-# CONFIG
-# =============================
-st.set_page_config(page_title="AI CKD Monitoring System",
-                   layout="wide",
-                   page_icon="🏥")
+# =====================================================
+# PAGE CONFIG
+# =====================================================
+st.set_page_config(
+    page_title="AI CKD Monitoring System",
+    layout="wide",
+    page_icon="🏥"
+)
 
-# =============================
-# DATABASE
-# =============================
+# =====================================================
+# DATABASE SETUP
+# =====================================================
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-username TEXT UNIQUE,
-password TEXT,
-role TEXT,
-phone TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT,
+    role TEXT,
+    phone TEXT
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS predictions (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-username TEXT,
-model_used TEXT,
-probability REAL,
-prediction INTEGER,
-visit_number INTEGER,
-next_visit TEXT,
-created_at TEXT
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT,
+    model_used TEXT,
+    probability REAL,
+    prediction INTEGER,
+    visit_number INTEGER,
+    next_visit TEXT,
+    created_at TEXT
 )
 """)
+
 conn.commit()
 
-# =============================
-# PASSWORD
-# =============================
-def hash_password(p):
-    return hashlib.sha256(p.encode()).hexdigest()
+# =====================================================
+# PASSWORD HASHING
+# =====================================================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-# =============================
-# LOAD MODELS
-# =============================
+# =====================================================
+# LOAD MODELS SAFELY
+# =====================================================
 def load_models():
     dnn, rf, scaler = None, None, None
 
@@ -71,9 +74,31 @@ def load_models():
 
 dnn_model, rf_model, scaler = load_models()
 
-# =============================
-# FOLLOW-UP LOGIC
-# =============================
+# =====================================================
+# SEVERITY GRAPH
+# =====================================================
+def show_severity(prob):
+    percent = prob * 100
+
+    fig, ax = plt.subplots()
+
+    ax.axvspan(0, 30)
+    ax.axvspan(30, 70)
+    ax.axvspan(70, 100)
+
+    ax.axvline(percent)
+
+    ax.set_xlim(0, 100)
+    ax.set_yticks([])
+    ax.set_xlabel("CKD Risk (%)")
+    ax.set_title("CKD Severity Scale")
+
+    st.pyplot(fig)
+    st.metric("Predicted Risk", f"{percent:.2f}%")
+
+# =====================================================
+# FOLLOW-UP + PROGRESSION LOGIC
+# =====================================================
 def calculate_followup(prob, username):
 
     visit_count = cursor.execute(
@@ -90,7 +115,7 @@ def calculate_followup(prob, username):
     else:
         days = 7
 
-    # Disease progression check
+    # Check progression
     previous = cursor.execute("""
         SELECT probability FROM predictions
         WHERE username=?
@@ -101,16 +126,16 @@ def calculate_followup(prob, username):
     if previous:
         previous_prob = previous[0]
         if prob - previous_prob > 0.15:
-            days = 7  # escalate if worsening rapidly
+            days = 7  # escalate if worsening fast
 
     next_visit = datetime.now() + timedelta(days=days)
 
     return visit_count + 1, next_visit.date()
 
-# =============================
-# SMS REMINDER (SIMULATION)
-# =============================
-def send_sms_reminder(username, next_visit):
+# =====================================================
+# SMS SIMULATION
+# =====================================================
+def send_sms(username, next_visit):
 
     phone = cursor.execute(
         "SELECT phone FROM users WHERE username=?",
@@ -118,46 +143,25 @@ def send_sms_reminder(username, next_visit):
     ).fetchone()
 
     if phone and phone[0]:
-        st.success(f"📩 SMS Reminder sent to {phone[0]} for visit on {next_visit}")
+        st.success(f"📩 SMS Reminder sent to {phone[0]} for {next_visit}")
     else:
-        st.warning("No phone number registered. Cannot send SMS.")
+        st.warning("⚠ No phone number registered.")
 
-# =============================
-# SEVERITY GRAPH
-# =============================
-def show_severity(prob):
-
-    percent = prob * 100
-    fig, ax = plt.subplots()
-
-    ax.axvspan(0, 30)
-    ax.axvspan(30, 70)
-    ax.axvspan(70, 100)
-
-    ax.axvline(percent)
-
-    ax.set_xlim(0, 100)
-    ax.set_yticks([])
-    ax.set_xlabel("Risk (%)")
-    ax.set_title("CKD Severity Scale")
-
-    st.pyplot(fig)
-    st.metric("Risk Level", f"{percent:.2f}%")
-
-# =============================
+# =====================================================
 # SESSION
-# =============================
+# =====================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# =============================
+# =====================================================
 # LOGIN / REGISTER
-# =============================
+# =====================================================
 def login_page():
 
     st.title("🏥 AI CKD Monitoring System")
 
-    option = st.radio("Select", ["Login", "Register"])
+    option = st.radio("Select Option", ["Login", "Register"])
+
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
@@ -172,15 +176,15 @@ def login_page():
                 VALUES (?,?,?,?)
                 """, (username, hash_password(password), role, phone))
                 conn.commit()
-                st.success("Registered Successfully")
+                st.success("Registered successfully")
             except:
                 st.error("Username already exists")
 
     if option == "Login":
         if st.button("Login"):
             user = cursor.execute("""
-            SELECT * FROM users
-            WHERE username=? AND password=?
+                SELECT * FROM users
+                WHERE username=? AND password=?
             """, (username, hash_password(password))).fetchone()
 
             if user:
@@ -191,12 +195,18 @@ def login_page():
             else:
                 st.error("Invalid credentials")
 
-# =============================
+# =====================================================
 # PATIENT PAGE
-# =============================
+# =====================================================
 def patient_page():
 
-    st.sidebar.title("Patient Panel")
+    st.sidebar.title("🧑 Patient Panel")
+
+    model_choice = st.sidebar.radio(
+        "Select Model",
+        ["DNN", "Random Forest"]
+    )
+
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
@@ -210,7 +220,7 @@ def patient_page():
     sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.2)
     hemo = st.number_input("Hemoglobin", 3.0, 20.0, 13.5)
 
-    if st.button("Predict"):
+    if st.button("Predict Risk"):
 
         if scaler is None:
             st.error("Scaler missing.")
@@ -234,9 +244,15 @@ def patient_page():
 
         scaled = scaler.transform(aligned)
 
-        if dnn_model:
+        if model_choice == "DNN":
+            if dnn_model is None:
+                st.error("DNN model not available.")
+                return
             prob = float(dnn_model.predict(scaled, verbose=0)[0][0])
         else:
+            if rf_model is None:
+                st.error("Random Forest model not available.")
+                return
             prob = float(rf_model.predict_proba(scaled)[0][1])
 
         prob = max(0, min(1, prob))
@@ -244,39 +260,46 @@ def patient_page():
 
         show_severity(prob)
 
-        visit_number, next_visit = calculate_followup(prob, st.session_state.username)
+        visit_number, next_visit = calculate_followup(
+            prob,
+            st.session_state.username
+        )
 
         cursor.execute("""
         INSERT INTO predictions
         (username,model_used,probability,prediction,
          visit_number,next_visit,created_at)
         VALUES (?,?,?,?,?,?,?)
-        """, (st.session_state.username,
-              "DNN",
-              prob,
-              pred,
-              visit_number,
-              str(next_visit),
-              datetime.now().isoformat()))
+        """, (
+            st.session_state.username,
+            model_choice,
+            prob,
+            pred,
+            visit_number,
+            str(next_visit),
+            datetime.now().isoformat()
+        ))
+
         conn.commit()
 
         st.info(f"📅 Recommended Next Visit: {next_visit}")
         st.write(f"Visit Number: {visit_number}")
 
-        send_sms_reminder(st.session_state.username, next_visit)
+        send_sms(st.session_state.username, next_visit)
 
-# =============================
+# =====================================================
 # DOCTOR PAGE
-# =============================
+# =====================================================
 def doctor_page():
 
-    st.sidebar.title("Doctor Dashboard")
+    st.sidebar.title("👩‍⚕ Doctor Dashboard")
+
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
 
     data = pd.read_sql("""
-        SELECT username, probability,
+        SELECT username, model_used, probability,
                visit_number, next_visit, created_at
         FROM predictions
         ORDER BY created_at DESC
@@ -288,15 +311,16 @@ def doctor_page():
 
     st.dataframe(data, use_container_width=True)
 
-    st.subheader("Risk Distribution")
+    st.subheader("📊 Risk Distribution")
     st.bar_chart(data["probability"])
 
-    st.subheader("Disease Progression Trends")
-    st.line_chart(data.sort_values("created_at")["probability"])
+    st.subheader("📈 Disease Progression Trend")
+    trend = data.sort_values("created_at")
+    st.line_chart(trend["probability"])
 
-# =============================
+# =====================================================
 # ROUTER
-# =============================
+# =====================================================
 if not st.session_state.logged_in:
     login_page()
 else:

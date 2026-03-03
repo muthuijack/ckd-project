@@ -230,28 +230,39 @@ def patient_page():
     st.title("🧪 CKD Risk Prediction")
 
     # Always show education section FIRST
-    st.subheader(text["about"])
+    # =========================
+# EDUCATION SECTION (ROW LAYOUT)
+# =========================
+
+st.title("🧪 CKD Risk Prediction")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.subheader("🩺 About CKD")
     st.write(text["desc"])
 
-    st.markdown("### ⚠ Common Causes")
-    st.write("""
-    - Diabetes
-    - High Blood Pressure
-    - Kidney infections
-    - Genetic disorders
-    - Long-term medication use
+with col2:
+    st.subheader("⚠ Common Causes")
+    st.markdown("""
+    - Diabetes  
+    - High Blood Pressure  
+    - Kidney infections  
+    - Genetic disorders  
+    - Long-term medication use  
     """)
 
-    st.markdown("### 🩺 Common Symptoms")
-    st.write("""
-    - Swelling in legs and feet
-    - Fatigue
-    - Urination changes
-    - Nausea
-    - Shortness of breath
+with col3:
+    st.subheader("🔍 Common Symptoms")
+    st.markdown("""
+    - Swelling in legs and feet  
+    - Fatigue  
+    - Urination changes  
+    - Nausea  
+    - Shortness of breath  
     """)
 
-    st.markdown("---")
+st.markdown("---")
 
     st.subheader("Enter Medical Information")
 
@@ -364,4 +375,5 @@ else:
         patient_page()
     else:
         doctor_page()
+
 

@@ -59,16 +59,14 @@ conn.commit()
 # =====================================================
 LANGUAGES = {
     "English": {
-        "about": "About Chronic Kidney Disease (CKD)",
-        "desc": "CKD is a long-term condition where kidneys gradually lose function.",
+        "about": "CKD is a long-term condition where kidneys gradually lose function.",
         "low": "Low Risk - Maintain healthy lifestyle.",
         "moderate": "Moderate Risk - Regular monitoring required.",
         "high": "High Risk - Immediate medical attention advised.",
         "download": "Download Medical Report"
     },
     "French": {
-        "about": "À propos de la Maladie Rénale Chronique",
-        "desc": "La MRC est une condition où les reins perdent progressivement leur fonction.",
+        "about": "La MRC est une condition où les reins perdent progressivement leur fonction.",
         "low": "Risque faible - Maintenez un mode de vie sain.",
         "moderate": "Risque modéré - Surveillance médicale recommandée.",
         "high": "Risque élevé - Consultation médicale urgente.",
@@ -83,7 +81,7 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # =====================================================
-# LOAD MODELS (ONLY TABULAR)
+# LOAD MODEL
 # =====================================================
 @st.cache_resource
 def load_models():
@@ -124,7 +122,6 @@ def calculate_followup(prob, username):
         days = 7
 
     next_visit = datetime.now() + timedelta(days=days)
-
     return visit_count + 1, next_visit.date()
 
 # =====================================================
@@ -161,18 +158,18 @@ def generate_pdf(username, prob, next_visit):
     return buffer
 
 # =====================================================
-# SESSION
+# SESSION INIT
 # =====================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 # =====================================================
-# LOGIN / REGISTER
+# LOGIN / REGISTER PAGE
 # =====================================================
 def login_page():
     st.title("🏥 AI CKD Monitoring System")
-    option = st.radio("Select Option", ["Login", "Register"])
 
+    option = st.radio("Select Option", ["Login", "Register"])
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
@@ -182,20 +179,21 @@ def login_page():
 
         if st.button("Register"):
             try:
-                cursor.execute("""
-                INSERT INTO users (username,password,role,phone)
-                VALUES (?,?,?,?)
-                """, (username, hash_password(password), role, phone))
+                cursor.execute(
+                    "INSERT INTO users (username,password,role,phone) VALUES (?,?,?,?)",
+                    (username, hash_password(password), role, phone)
+                )
                 conn.commit()
                 st.success("Registered successfully")
             except:
-                st.error("Username exists")
+                st.error("Username already exists")
 
     if option == "Login":
         if st.button("Login"):
-            user = cursor.execute("""
-            SELECT * FROM users WHERE username=? AND password=?
-            """, (username, hash_password(password))).fetchone()
+            user = cursor.execute(
+                "SELECT * FROM users WHERE username=? AND password=?",
+                (username, hash_password(password))
+            ).fetchone()
 
             if user:
                 st.session_state.logged_in = True
@@ -207,64 +205,42 @@ def login_page():
 
 # =====================================================
 # PATIENT PAGE
+# =====================================================
 def patient_page():
 
-    # =========================
-    # SIDEBAR
-    # =========================
     st.sidebar.title("Patient Panel")
-
-    language = st.sidebar.selectbox(
-        "🌍 Select Language",
-        list(LANGUAGES.keys())
-    )
-
+    language = st.sidebar.selectbox("🌍 Select Language", list(LANGUAGES.keys()))
     text = LANGUAGES[language]
 
-    st.sidebar.markdown("---")
-    st.sidebar.info("Fill in your medical data and click Predict.")
-
-    # =========================
-    # MAIN PAGE
-    # =========================
     st.title("🧪 CKD Risk Prediction")
 
-    # Always show education section FIRST
-    # =========================
-# EDUCATION SECTION (ROW LAYOUT)
-# =========================
+    # Education in rows
+    col1, col2, col3 = st.columns(3)
 
-st.title("🧪 CKD Risk Prediction")
+    with col1:
+        st.subheader("🩺 About CKD")
+        st.write(text["about"])
 
-col1, col2, col3 = st.columns(3)
+    with col2:
+        st.subheader("⚠ Common Causes")
+        st.markdown("""
+        - Diabetes  
+        - High Blood Pressure  
+        - Genetic disorders  
+        - Kidney infections  
+        """)
 
-with col1:
-    st.subheader("🩺 About CKD")
-    st.write(text["desc"])
+    with col3:
+        st.subheader("🔍 Common Symptoms")
+        st.markdown("""
+        - Swelling in legs  
+        - Fatigue  
+        - Urination changes  
+        - Nausea  
+        """)
 
-with col2:
-    st.subheader("⚠ Common Causes")
-    st.markdown("""
-    - Diabetes  
-    - High Blood Pressure  
-    - Kidney infections  
-    - Genetic disorders  
-    - Long-term medication use  
-    """)
-
-with col3:
-    st.subheader("🔍 Common Symptoms")
-    st.markdown("""
-    - Swelling in legs and feet  
-    - Fatigue  
-    - Urination changes  
-    - Nausea  
-    - Shortness of breath  
-    """)
-
-st.markdown("---")
-
-st.subheader("Enter Medical Information")
+    st.markdown("---")
+    st.subheader("Enter Medical Information")
 
     age = st.number_input("Age", 1, 120, 45)
     bp = st.number_input("Blood Pressure", 50, 200, 80)
@@ -276,12 +252,8 @@ st.subheader("Enter Medical Information")
     if st.button("Predict"):
 
         df = pd.DataFrame([{
-            "age": age,
-            "bp": bp,
-            "bgr": bgr,
-            "bu": bu,
-            "sc": sc,
-            "hemo": hemo
+            "age": age, "bp": bp, "bgr": bgr,
+            "bu": bu, "sc": sc, "hemo": hemo
         }])
 
         features = scaler.feature_names_in_
@@ -292,24 +264,17 @@ st.subheader("Enter Medical Information")
                 aligned[col] = df[col]
 
         scaled = scaler.transform(aligned)
-
         prob = float(rf_model.predict_proba(scaled)[0][1])
         prob = max(0, min(1, prob))
 
-        st.markdown("---")
         st.subheader("📊 Risk Analysis")
-
         show_severity(prob)
 
-        visit_number, next_visit = calculate_followup(
-            prob,
-            st.session_state.username
-        )
+        visit_number, next_visit = calculate_followup(prob, st.session_state.username)
 
         cursor.execute("""
         INSERT INTO predictions
-        (username,model_used,probability,prediction,
-         visit_number,next_visit,created_at)
+        (username,model_used,probability,prediction,visit_number,next_visit,created_at)
         VALUES (?,?,?,?,?,?,?)
         """, (
             st.session_state.username,
@@ -324,7 +289,6 @@ st.subheader("Enter Medical Information")
 
         send_sms(st.session_state.username, next_visit)
 
-        # Risk interpretation
         if prob < 0.3:
             st.success(text["low"])
         elif prob < 0.7:
@@ -332,12 +296,7 @@ st.subheader("Enter Medical Information")
         else:
             st.error(text["high"])
 
-        # PDF
-        pdf = generate_pdf(
-            st.session_state.username,
-            prob,
-            next_visit
-        )
+        pdf = generate_pdf(st.session_state.username, prob, next_visit)
 
         st.download_button(
             label=text["download"],
@@ -345,6 +304,7 @@ st.subheader("Enter Medical Information")
             file_name="ckd_report.pdf",
             mime="application/pdf"
         )
+
 # =====================================================
 # DOCTOR PAGE
 # =====================================================
@@ -366,7 +326,7 @@ def doctor_page():
     st.line_chart(data["probability"])
 
 # =====================================================
-# ROUTER
+# ROUTING
 # =====================================================
 if not st.session_state.logged_in:
     login_page()
@@ -375,6 +335,3 @@ else:
         patient_page()
     else:
         doctor_page()
-
-
-

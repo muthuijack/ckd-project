@@ -243,7 +243,7 @@ def show_ckd_education(prob=None):
         if percent < 30:
             st.success("Your risk appears low. Continue healthy habits and routine checkups.")
         elif percent < 70:
-            st.warning("Moderate risk detected. Regular monitoring and lifestyle
+            st.warning("Moderate risk detected. Regular monitoring and lifestyle")
 # PATIENT PAGE
 # =====================================================
 def patient_page():
@@ -376,4 +376,5 @@ else:
         patient_page()
     else:
         doctor_page()
+
 

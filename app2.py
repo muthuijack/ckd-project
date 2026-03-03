@@ -196,6 +196,54 @@ def login_page():
                 st.error("Invalid credentials")
 
 # =====================================================
+def show_ckd_education(prob=None):
+
+    st.subheader("🧠 About Chronic Kidney Disease (CKD)")
+
+    st.markdown("""
+    **Chronic Kidney Disease (CKD)** is a long-term condition where the kidneys
+    gradually lose their ability to filter waste and excess fluids from the blood.
+
+    If left unmanaged, CKD can progress to kidney failure, requiring dialysis or
+    kidney transplantation.
+    """)
+
+    st.markdown("### ⚠ Common Causes")
+    st.markdown("""
+    - High Blood Pressure (Hypertension)
+    - Diabetes
+    - Recurrent kidney infections
+    - Genetic kidney disorders
+    - Long-term use of certain medications
+    """)
+
+    st.markdown("### 🩺 Common Symptoms")
+    st.markdown("""
+    - Swelling in feet and ankles
+    - Fatigue and weakness
+    - Changes in urination
+    - Shortness of breath
+    - Nausea
+    """)
+
+    st.markdown("### 🛡 Prevention & Management")
+    st.markdown("""
+    - Maintain healthy blood pressure
+    - Control blood sugar
+    - Stay hydrated
+    - Avoid excessive salt
+    - Regular medical checkups
+    """)
+
+    if prob is not None:
+        percent = prob * 100
+
+        st.markdown("### 📊 Your Risk Interpretation")
+
+        if percent < 30:
+            st.success("Your risk appears low. Continue healthy habits and routine checkups.")
+        elif percent < 70:
+            st.warning("Moderate risk detected. Regular monitoring and lifestyle
 # PATIENT PAGE
 # =====================================================
 def patient_page():
@@ -328,3 +376,4 @@ else:
         patient_page()
     else:
         doctor_page()
+

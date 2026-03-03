@@ -207,13 +207,53 @@ def login_page():
 
 # =====================================================
 # PATIENT PAGE
-# =====================================================
 def patient_page():
 
+    # =========================
+    # SIDEBAR
+    # =========================
     st.sidebar.title("Patient Panel")
 
-    language = st.selectbox("Language", list(LANGUAGES.keys()))
+    language = st.sidebar.selectbox(
+        "🌍 Select Language",
+        list(LANGUAGES.keys())
+    )
+
     text = LANGUAGES[language]
+
+    st.sidebar.markdown("---")
+    st.sidebar.info("Fill in your medical data and click Predict.")
+
+    # =========================
+    # MAIN PAGE
+    # =========================
+    st.title("🧪 CKD Risk Prediction")
+
+    # Always show education section FIRST
+    st.subheader(text["about"])
+    st.write(text["desc"])
+
+    st.markdown("### ⚠ Common Causes")
+    st.write("""
+    - Diabetes
+    - High Blood Pressure
+    - Kidney infections
+    - Genetic disorders
+    - Long-term medication use
+    """)
+
+    st.markdown("### 🩺 Common Symptoms")
+    st.write("""
+    - Swelling in legs and feet
+    - Fatigue
+    - Urination changes
+    - Nausea
+    - Shortness of breath
+    """)
+
+    st.markdown("---")
+
+    st.subheader("Enter Medical Information")
 
     age = st.number_input("Age", 1, 120, 45)
     bp = st.number_input("Blood Pressure", 50, 200, 80)
@@ -225,8 +265,12 @@ def patient_page():
     if st.button("Predict"):
 
         df = pd.DataFrame([{
-            "age": age, "bp": bp, "bgr": bgr,
-            "bu": bu, "sc": sc, "hemo": hemo
+            "age": age,
+            "bp": bp,
+            "bgr": bgr,
+            "bu": bu,
+            "sc": sc,
+            "hemo": hemo
         }])
 
         features = scaler.feature_names_in_
@@ -240,6 +284,9 @@ def patient_page():
 
         prob = float(rf_model.predict_proba(scaled)[0][1])
         prob = max(0, min(1, prob))
+
+        st.markdown("---")
+        st.subheader("📊 Risk Analysis")
 
         show_severity(prob)
 
@@ -266,9 +313,7 @@ def patient_page():
 
         send_sms(st.session_state.username, next_visit)
 
-        st.subheader(text["about"])
-        st.write(text["desc"])
-
+        # Risk interpretation
         if prob < 0.3:
             st.success(text["low"])
         elif prob < 0.7:
@@ -276,6 +321,7 @@ def patient_page():
         else:
             st.error(text["high"])
 
+        # PDF
         pdf = generate_pdf(
             st.session_state.username,
             prob,
@@ -288,7 +334,6 @@ def patient_page():
             file_name="ckd_report.pdf",
             mime="application/pdf"
         )
-
 # =====================================================
 # DOCTOR PAGE
 # =====================================================
@@ -319,3 +364,4 @@ else:
         patient_page()
     else:
         doctor_page()
+

@@ -7,7 +7,12 @@ import os
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import joblib
-from tensorflow.keras.models import load_model
+import io
+
+# PDF
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
 
 # =====================================================
 # PAGE CONFIG
@@ -19,7 +24,7 @@ st.set_page_config(
 )
 
 # =====================================================
-# DATABASE SETUP
+# DATABASE
 # =====================================================
 conn = sqlite3.connect("ckd.db", check_same_thread=False)
 cursor = conn.cursor()
@@ -50,57 +55,60 @@ CREATE TABLE IF NOT EXISTS predictions (
 conn.commit()
 
 # =====================================================
-# PASSWORD HASHING
+# LANGUAGE SYSTEM
+# =====================================================
+LANGUAGES = {
+    "English": {
+        "about": "About Chronic Kidney Disease (CKD)",
+        "desc": "CKD is a long-term condition where kidneys gradually lose function.",
+        "low": "Low Risk - Maintain healthy lifestyle.",
+        "moderate": "Moderate Risk - Regular monitoring required.",
+        "high": "High Risk - Immediate medical attention advised.",
+        "download": "Download Medical Report"
+    },
+    "French": {
+        "about": "À propos de la Maladie Rénale Chronique",
+        "desc": "La MRC est une condition où les reins perdent progressivement leur fonction.",
+        "low": "Risque faible - Maintenez un mode de vie sain.",
+        "moderate": "Risque modéré - Surveillance médicale recommandée.",
+        "high": "Risque élevé - Consultation médicale urgente.",
+        "download": "Télécharger le rapport médical"
+    }
+}
+
+# =====================================================
+# SECURITY
 # =====================================================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 # =====================================================
-# LOAD MODELS SAFELY
+# LOAD MODELS (ONLY TABULAR)
 # =====================================================
+@st.cache_resource
 def load_models():
-    dnn, rf, scaler = None, None, None
+    rf = joblib.load("ckd_random_forest.pkl") if os.path.exists("ckd_random_forest.pkl") else None
+    scaler = joblib.load("scaler.pkl") if os.path.exists("scaler.pkl") else None
+    return rf, scaler
 
-    if os.path.exists("ckd_dnn_model.keras"):
-        dnn = load_model("ckd_dnn_model.keras")
-
-    if os.path.exists("ckd_random_forest.pkl"):
-        rf = joblib.load("ckd_random_forest.pkl")
-
-    if os.path.exists("scaler.pkl"):
-        scaler = joblib.load("scaler.pkl")
-
-    return dnn, rf, scaler
-
-dnn_model, rf_model, scaler = load_models()
+rf_model, scaler = load_models()
 
 # =====================================================
 # SEVERITY GRAPH
 # =====================================================
 def show_severity(prob):
     percent = prob * 100
-
     fig, ax = plt.subplots()
-
-    ax.axvspan(0, 30)
-    ax.axvspan(30, 70)
-    ax.axvspan(70, 100)
-
-    ax.axvline(percent)
-
+    ax.barh(["Risk"], [percent])
     ax.set_xlim(0, 100)
-    ax.set_yticks([])
-    ax.set_xlabel("CKD Risk (%)")
-    ax.set_title("CKD Severity Scale")
-
+    ax.set_title("CKD Severity Scale (%)")
     st.pyplot(fig)
-    st.metric("Predicted Risk", f"{percent:.2f}%")
+    st.metric("Risk Probability", f"{percent:.2f}%")
 
 # =====================================================
-# FOLLOW-UP + PROGRESSION LOGIC
+# FOLLOW-UP LOGIC
 # =====================================================
 def calculate_followup(prob, username):
-
     visit_count = cursor.execute(
         "SELECT COUNT(*) FROM predictions WHERE username=?",
         (username,)
@@ -115,19 +123,6 @@ def calculate_followup(prob, username):
     else:
         days = 7
 
-    # Check progression
-    previous = cursor.execute("""
-        SELECT probability FROM predictions
-        WHERE username=?
-        ORDER BY created_at DESC
-        LIMIT 1
-    """, (username,)).fetchone()
-
-    if previous:
-        previous_prob = previous[0]
-        if prob - previous_prob > 0.15:
-            days = 7  # escalate if worsening fast
-
     next_visit = datetime.now() + timedelta(days=days)
 
     return visit_count + 1, next_visit.date()
@@ -136,7 +131,6 @@ def calculate_followup(prob, username):
 # SMS SIMULATION
 # =====================================================
 def send_sms(username, next_visit):
-
     phone = cursor.execute(
         "SELECT phone FROM users WHERE username=?",
         (username,)
@@ -144,8 +138,27 @@ def send_sms(username, next_visit):
 
     if phone and phone[0]:
         st.success(f"📩 SMS Reminder sent to {phone[0]} for {next_visit}")
-    else:
-        st.warning("⚠ No phone number registered.")
+
+# =====================================================
+# PDF GENERATION
+# =====================================================
+def generate_pdf(username, prob, next_visit):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("AI CKD Medical Report", styles["Title"]))
+    elements.append(Spacer(1, 0.3 * inch))
+    elements.append(Paragraph(f"Patient: {username}", styles["Normal"]))
+    elements.append(Paragraph(f"Risk Probability: {prob*100:.2f}%", styles["Normal"]))
+    elements.append(Paragraph(f"Next Visit: {next_visit}", styles["Normal"]))
+    elements.append(Spacer(1, 0.3 * inch))
+    elements.append(Paragraph("Generated by AI CKD Monitoring System", styles["Italic"]))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 # =====================================================
 # SESSION
@@ -157,9 +170,7 @@ if "logged_in" not in st.session_state:
 # LOGIN / REGISTER
 # =====================================================
 def login_page():
-
     st.title("🏥 AI CKD Monitoring System")
-
     option = st.radio("Select Option", ["Login", "Register"])
 
     username = st.text_input("Username")
@@ -167,7 +178,7 @@ def login_page():
 
     if option == "Register":
         role = st.selectbox("Role", ["patient", "doctor"])
-        phone = st.text_input("Phone Number (for SMS reminders)")
+        phone = st.text_input("Phone")
 
         if st.button("Register"):
             try:
@@ -178,13 +189,12 @@ def login_page():
                 conn.commit()
                 st.success("Registered successfully")
             except:
-                st.error("Username already exists")
+                st.error("Username exists")
 
     if option == "Login":
         if st.button("Login"):
             user = cursor.execute("""
-                SELECT * FROM users
-                WHERE username=? AND password=?
+            SELECT * FROM users WHERE username=? AND password=?
             """, (username, hash_password(password))).fetchone()
 
             if user:
@@ -196,70 +206,14 @@ def login_page():
                 st.error("Invalid credentials")
 
 # =====================================================
-def show_ckd_education(prob=None):
-
-    st.subheader("🧠 About Chronic Kidney Disease (CKD)")
-
-    st.markdown("""
-    **Chronic Kidney Disease (CKD)** is a long-term condition where the kidneys
-    gradually lose their ability to filter waste and excess fluids from the blood.
-
-    If left unmanaged, CKD can progress to kidney failure, requiring dialysis or
-    kidney transplantation.
-    """)
-
-    st.markdown("### ⚠ Common Causes")
-    st.markdown("""
-    - High Blood Pressure (Hypertension)
-    - Diabetes
-    - Recurrent kidney infections
-    - Genetic kidney disorders
-    - Long-term use of certain medications
-    """)
-
-    st.markdown("### 🩺 Common Symptoms")
-    st.markdown("""
-    - Swelling in feet and ankles
-    - Fatigue and weakness
-    - Changes in urination
-    - Shortness of breath
-    - Nausea
-    """)
-
-    st.markdown("### 🛡 Prevention & Management")
-    st.markdown("""
-    - Maintain healthy blood pressure
-    - Control blood sugar
-    - Stay hydrated
-    - Avoid excessive salt
-    - Regular medical checkups
-    """)
-
-    if prob is not None:
-        percent = prob * 100
-
-        st.markdown("### 📊 Your Risk Interpretation")
-
-        if percent < 30:
-            st.success("Your risk appears low. Continue healthy habits and routine checkups.")
-        elif percent < 70:
-            st.warning("Moderate risk detected. Regular monitoring and lifestyle")
 # PATIENT PAGE
 # =====================================================
 def patient_page():
 
-    st.sidebar.title("🧑 Patient Panel")
+    st.sidebar.title("Patient Panel")
 
-    model_choice = st.sidebar.radio(
-        "Select Model",
-        ["DNN", "Random Forest"]
-    )
-
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
-
-    st.header("CKD Risk Assessment")
+    language = st.selectbox("Language", list(LANGUAGES.keys()))
+    text = LANGUAGES[language]
 
     age = st.number_input("Age", 1, 120, 45)
     bp = st.number_input("Blood Pressure", 50, 200, 80)
@@ -268,19 +222,11 @@ def patient_page():
     sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.2)
     hemo = st.number_input("Hemoglobin", 3.0, 20.0, 13.5)
 
-    if st.button("Predict Risk"):
-
-        if scaler is None:
-            st.error("Scaler missing.")
-            return
+    if st.button("Predict"):
 
         df = pd.DataFrame([{
-            "age": age,
-            "bp": bp,
-            "bgr": bgr,
-            "bu": bu,
-            "sc": sc,
-            "hemo": hemo
+            "age": age, "bp": bp, "bgr": bgr,
+            "bu": bu, "sc": sc, "hemo": hemo
         }])
 
         features = scaler.feature_names_in_
@@ -292,19 +238,8 @@ def patient_page():
 
         scaled = scaler.transform(aligned)
 
-        if model_choice == "DNN":
-            if dnn_model is None:
-                st.error("DNN model not available.")
-                return
-            prob = float(dnn_model.predict(scaled, verbose=0)[0][0])
-        else:
-            if rf_model is None:
-                st.error("Random Forest model not available.")
-                return
-            prob = float(rf_model.predict_proba(scaled)[0][1])
-
+        prob = float(rf_model.predict_proba(scaled)[0][1])
         prob = max(0, min(1, prob))
-        pred = 1 if prob > 0.5 else 0
 
         show_severity(prob)
 
@@ -320,51 +255,59 @@ def patient_page():
         VALUES (?,?,?,?,?,?,?)
         """, (
             st.session_state.username,
-            model_choice,
+            "Random Forest",
             prob,
-            pred,
+            1 if prob > 0.5 else 0,
             visit_number,
             str(next_visit),
             datetime.now().isoformat()
         ))
-
         conn.commit()
 
-        st.info(f"📅 Recommended Next Visit: {next_visit}")
-        st.write(f"Visit Number: {visit_number}")
-
         send_sms(st.session_state.username, next_visit)
+
+        st.subheader(text["about"])
+        st.write(text["desc"])
+
+        if prob < 0.3:
+            st.success(text["low"])
+        elif prob < 0.7:
+            st.warning(text["moderate"])
+        else:
+            st.error(text["high"])
+
+        pdf = generate_pdf(
+            st.session_state.username,
+            prob,
+            next_visit
+        )
+
+        st.download_button(
+            label=text["download"],
+            data=pdf,
+            file_name="ckd_report.pdf",
+            mime="application/pdf"
+        )
 
 # =====================================================
 # DOCTOR PAGE
 # =====================================================
 def doctor_page():
+    st.title("Doctor Dashboard")
 
-    st.sidebar.title("👩‍⚕ Doctor Dashboard")
-
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
-
-    data = pd.read_sql("""
-        SELECT username, model_used, probability,
-               visit_number, next_visit, created_at
-        FROM predictions
-        ORDER BY created_at DESC
-    """, conn)
+    data = pd.read_sql("SELECT * FROM predictions", conn)
 
     if data.empty:
-        st.info("No records yet.")
+        st.info("No records yet")
         return
 
-    st.dataframe(data, use_container_width=True)
+    st.dataframe(data)
 
-    st.subheader("📊 Risk Distribution")
+    st.subheader("Risk Distribution")
     st.bar_chart(data["probability"])
 
-    st.subheader("📈 Disease Progression Trend")
-    trend = data.sort_values("created_at")
-    st.line_chart(trend["probability"])
+    st.subheader("Disease Progression")
+    st.line_chart(data["probability"])
 
 # =====================================================
 # ROUTER
@@ -376,5 +319,3 @@ else:
         patient_page()
     else:
         doctor_page()
-
-

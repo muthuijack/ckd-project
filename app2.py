@@ -264,7 +264,7 @@ with col3:
 
 st.markdown("---")
 
-    st.subheader("Enter Medical Information")
+st.subheader("Enter Medical Information")
 
     age = st.number_input("Age", 1, 120, 45)
     bp = st.number_input("Blood Pressure", 50, 200, 80)
@@ -375,5 +375,6 @@ else:
         patient_page()
     else:
         doctor_page()
+
 
 

@@ -148,32 +148,71 @@ def auth_page():
 # =====================================================
 # PATIENT INTERFACE
 # =====================================================
-def patient_dashboard():
-    st.sidebar.header(f"Welcome, {st.session_state.username}")
+def patient_page():
+    st.sidebar.title(f"Welcome, {st.session_state.username}")
+    
     if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
         st.rerun()
 
-    # Education Header
+    # =============================================
+    # 1. PRE-ANALYSIS INFORMATION
+    # =============================================
+    st.title("🏥 CKD AI Risk Assessment")
     
-
-    st.title("🔍 Kidney Risk Assessment")
+    # Educational Section
+    col_info1, col_info2 = st.columns([2, 1])
     
-    with st.expander("Why are these values important?"):
-        st.write("Serum Creatinine and Hemoglobin are critical indicators of how well your kidneys filter waste.")
+    with col_info1:
+        st.markdown("""
+        ### Understanding Your Kidney Health
+        Chronic Kidney Disease (CKD) means your kidneys are damaged and can’t filter blood the way they should. 
+        Before we begin the AI analysis, please review the following:
+        
+        * **Why these tests?** We use markers like **Serum Creatinine** to estimate your kidney's filtration rate.
+        * **Accuracy:** Please ensure your data comes from a recent (last 3-6 months) blood or urine test.
+        * **Confidentiality:** Your data is stored securely in our hospital database for your doctor to review.
+        """)
+    
+    with col_info2:
+        st.info("""
+        **Did you know?** High blood pressure and Diabetes are the two leading causes of Kidney failure. Managing these can stop CKD from getting worse.
+        """)
 
-    # Input Section
-    col1, col2 = st.columns(2)
+    # Visual Guide to Kidney Stages
+    with st.expander("📊 View Kidney Disease Stages & GFR"):
+        st.write("""
+        Kidney function is measured by GFR (Glomerular Filtration Rate). 
+        Lower numbers mean more advanced disease.
+        """)
+        
+
+    st.markdown("---")
+
+    # =============================================
+    # 2. DATA INPUT SECTION
+    # =============================================
+    st.subheader("📝 Enter Your Clinical Measurements")
+    st.caption("Please refer to your latest lab report to fill in these values.")
+
+    col1, col2, col3 = st.columns(3)
+    
     with col1:
-        age = st.number_input("Age", 1, 110, 45)
-        bp = st.number_input("Blood Pressure (systolic)", 50, 200, 120)
-        bgr = st.number_input("Blood Glucose (mg/dl)", 50, 500, 110)
+        age = st.number_input("Age (Years)", 1, 120, 45)
+        bp = st.number_input("Blood Pressure (Systolic)", 50, 200, 120, help="Top number of your BP reading")
+        
     with col2:
-        bu = st.number_input("Blood Urea", 1, 400, 30)
-        sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.1)
+        bgr = st.number_input("Blood Glucose (mg/dl)", 50, 500, 110, help="Random blood sugar level")
+        bu = st.number_input("Blood Urea (mg/dl)", 1, 400, 30)
+        
+    with col3:
+        sc = st.number_input("Serum Creatinine (mg/dl)", 0.1, 20.0, 1.1, help="Most important marker for kidney filter health")
         hemo = st.number_input("Hemoglobin (g/dL)", 3.0, 20.0, 14.0)
 
-    if st.button("Run AI Analysis"):
+    # =============================================
+    # 3. PREDICTION LOGIC (Remains the same)
+    # =============================================
+     if st.button("Run AI Analysis"):
         if rf_model and scaler:
             # 1. Feature Alignment (Crucial Step)
             features = scaler.feature_names_in_
@@ -258,4 +297,5 @@ if __name__ == "__main__":
             patient_dashboard()
         else:
             doctor_dashboard()
+
 

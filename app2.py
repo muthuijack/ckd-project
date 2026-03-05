@@ -191,7 +191,7 @@ def patient_page():
         st.subheader("Chronic Kidney Disease (CKD) Stages")
         
 
-[Image of stages of chronic kidney disease and GFR levels]
+#[Image of stages of chronic kidney disease and GFR levels]
 
         st.markdown("""
         1. **Stage 1:** GFR >90 (Normal) | 2. **Stage 2:** GFR 60-89 (Mild) | 
@@ -203,7 +203,7 @@ def patient_page():
         st.subheader("Kidney Function Guide")
         
 
-[Image of the human kidney system and its function]
+#[Image of the human kidney system and its function]
 
         st.write("Your kidneys maintain your body's chemical balance by filtering waste.")
 
@@ -323,3 +323,4 @@ if not st.session_state.logged_in: auth_page()
 else:
     if st.session_state.role == "patient": patient_page()
     else: doctor_dashboard()
+

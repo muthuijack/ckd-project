@@ -243,7 +243,7 @@ def patient_page():
             with v_col2:
                 
 
-[Image of stages of chronic kidney disease and GFR levels]
+# Image of stages of chronic kidney disease and GFR levels
 
                 st.info("The AI compares your 24 clinical markers against thousands of hospital records.")
 
@@ -294,4 +294,5 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+
 

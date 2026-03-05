@@ -32,7 +32,7 @@ st.set_page_config(
 conn = mysql.connector.connect(
     host="localhost",
     user="root",
-    password="YOUR_PASSWORD",
+    password="68466450@machariamuthui",
     database="ckd_system"
 )
 
@@ -545,3 +545,4 @@ else:
     else:
 
         doctor_page()
+

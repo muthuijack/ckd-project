@@ -146,7 +146,7 @@ def auth_page():
                 except: st.error("Username already exists.")
 
 # =====================================================
-# PATIENT INTERFACE (ALL 24 FEATURES)
+# PATIENT INTERFACE (UPDATED VERSION)
 # =====================================================
 def patient_page():
     st.sidebar.title(f"Patient: {st.session_state.username}")
@@ -154,131 +154,159 @@ def patient_page():
         st.session_state.logged_in = False
         st.rerun()
 
-    st.title("🏥 Kidney Risk Assessment")
-    
-    # --- INFORMATION HEADER ---
-    with st.expander("ℹ️ Clinical Guidelines: Before you enter data"):
-        st.write("""
-        This analysis requires data from your **Complete Blood Count (CBC)** and **Urine Routine Examination**.
-        Hover over the **(?)** icons for specific medical context.
-        """)
+    st.title("🏥 NephroAI Clinical Portal")
 
-    # --- MAIN DATA ENTRY FORM ---
-    with st.form("comprehensive_form"):
-        st.subheader("📝 Lab Report Parameters")
-        
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            age = st.number_input("Age", 1, 120, 45)
-            bp = st.number_input("Blood Pressure", 50, 200, 120, help="Systolic BP")
-            sg = st.selectbox("Specific Gravity", [1.005, 1.010, 1.015, 1.020, 1.025], index=3)
-        with c2:
-            al = st.selectbox("Albumin (0-5)", [0, 1, 2, 3, 4, 5])
-            su = st.selectbox("Sugar (0-5)", [0, 1, 2, 3, 4, 5])
-            rbc = st.selectbox("RBC in Urine", ["normal", "abnormal"])
-        with c3:
-            pc = st.selectbox("Pus Cells", ["normal", "abnormal"])
-            pcc = st.selectbox("Pus Cell Clumps", ["present", "notpresent"])
-            ba = st.selectbox("Bacteria", ["present", "notpresent"])
-        with c4:
-            bgr = st.number_input("Blood Glucose", 50, 500, 121)
-            bu = st.number_input("Blood Urea", 1, 400, 36)
-            sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.2, help="Crucial for Kidney function")
+    # --- 1. EDUCATION TABS ---
+    tabs = st.tabs(["📝 Data Entry", "📚 Kidney Education", "🧪 Marker Guide"])
 
-        st.divider()
-        
-        c5, c6, c7, c8 = st.columns(4)
-        with c5:
-            sod = st.number_input("Sodium", 100, 180, 137)
-            pot = st.number_input("Potassium", 2.0, 10.0, 4.6)
-        with c6:
-            hemo = st.number_input("Hemoglobin", 3.0, 20.0, 12.5)
-            pcv = st.number_input("Packed Cell Volume", 10, 60, 40)
-        with c7:
-            wc = st.number_input("WBC Count", 2000, 25000, 8000)
-            rc = st.number_input("RBC Count", 2.0, 8.0, 4.7)
-        with c8:
-            htn = st.selectbox("Hypertension", ["yes", "no"])
-            dm = st.selectbox("Diabetes", ["yes", "no"])
+    with tabs[1]:
+        st.subheader("Understanding Chronic Kidney Disease (CKD)")
+        col_ed1, col_ed2 = st.columns(2)
+        with col_ed1:
+            st.markdown("""
+            **The 5 Stages of Kidney Health:**
+            1. **Stage 1:** GFR >90 (Normal)
+            2. **Stage 2:** GFR 60-89 (Mild decrease)
+            3. **Stage 3:** GFR 30-59 (Moderate decrease)
+            4. **Stage 4:** GFR 15-29 (Severe decrease)
+            5. **Stage 5:** GFR <15 (Kidney Failure)
+            """)
+        with col_ed2:
+            # Image placeholder for kidney stages
+            st.caption("[Image of stages of chronic kidney disease and GFR levels]")
+            st.image("https://via.placeholder.com/400x200?text=Kidney+Stages+Diagram", use_container_width=True)
 
-        st.divider()
-        
-        h1, h2, h3, h4 = st.columns(4)
-        with h1: 
-            cad = st.selectbox("CAD Disease", ["yes", "no"])
-        with h2: 
-            appet = st.selectbox("Appetite", ["good", "poor"])
-        with h3: 
-            pe = st.selectbox("Pedal Edema", ["yes", "no"])
-        with h4: 
-            ane = st.selectbox("Anemia", ["yes", "no"])
+    with tabs[2]:
+        st.subheader("Biological Function")
+        # Image placeholder for kidney anatomy
+        st.caption("[Image of the human kidney system and its function]")
+        st.image("https://via.placeholder.com/600x300?text=Kidney+Anatomy+Diagram", use_container_width=True)
+        st.write("Your kidneys filter about 150 quarts of blood daily to create 1-2 quarts of urine.")
 
-        submit = st.form_submit_button("🚀 GENERATE AI ANALYSIS")
-        
+    with tabs[0]:
+        # --- 2. THE FORM (INPUTS ONLY) ---
+        with st.form("clinical_form"):
+            st.subheader("Clinical Data Entry")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                age = st.number_input("Age", 1, 120, 45)
+                bp = st.number_input("Blood Pressure", 50, 200, 120)
+                sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.2)
+            with c2:
+                hemo = st.number_input("Hemoglobin", 3.0, 20.0, 12.5)
+                bgr = st.number_input("Blood Glucose", 50, 500, 121)
+                bu = st.number_input("Blood Urea", 1, 400, 36)
+            with c3:
+                sg = st.selectbox("Specific Gravity", [1.005, 1.010, 1.015, 1.020, 1.025], index=3)
+                al = st.selectbox("Albumin", [0, 1, 2, 3, 4, 5])
+                htn = st.selectbox("Hypertension", ["yes", "no"])
+
+            # Additional inputs to cover more features
+            st.subheader("Additional Clinical Parameters")
+            c4, c5, c6 = st.columns(3)
+            with c4:
+                su = st.selectbox("Sugar", [0, 1, 2, 3, 4, 5], index=0)
+                rbc = st.selectbox("RBC in Urine", ["normal", "abnormal"])
+                pc = st.selectbox("Pus Cells", ["normal", "abnormal"])
+            with c5:
+                pcc = st.selectbox("Pus Cell Clumps", ["present", "notpresent"])
+                ba = st.selectbox("Bacteria", ["present", "notpresent"])
+                sod = st.number_input("Sodium", 100, 180, 137)
+            with c6:
+                pot = st.number_input("Potassium", 2.0, 10.0, 4.6)
+                pcv = st.number_input("Packed Cell Volume", 10, 60, 40)
+                wc = st.number_input("WBC Count", 2000, 25000, 8000)
+
+            c7, c8, c9 = st.columns(3)
+            with c7:
+                rc = st.number_input("RBC Count", 2.0, 8.0, 4.7)
+                dm = st.selectbox("Diabetes", ["yes", "no"])
+            with c8:
+                cad = st.selectbox("CAD Disease", ["yes", "no"])
+                appet = st.selectbox("Appetite", ["good", "poor"])
+            with c9:
+                pe = st.selectbox("Pedal Edema", ["yes", "no"])
+                ane = st.selectbox("Anemia", ["yes", "no"])
+
+            submit = st.form_submit_button("🚀 Run AI Analysis")
+
+        # --- 3. THE OUTPUT (OUTSIDE THE FORM) ---
         if submit:
             if rf_model and scaler:
-                # 1. Binary Mapping for Categorical Data
+                # Mapping Logic
                 mapping = {"yes": 1, "no": 0, "normal": 1, "abnormal": 0, 
                            "present": 1, "notpresent": 0, "good": 1, "poor": 0}
                 
-                # 2. Collect all UI inputs into a dictionary
+                # Collect all user data
                 user_data = {
-                    "age": age, "bp": bp, "sg": sg, "al": al, "su": su, 
-                    "rbc": mapping[rbc], "pc": mapping[pc], "pcc": mapping[pcc], 
-                    "ba": mapping[ba], "bgr": bgr, "bu": bu, "sc": sc, 
-                    "sod": sod, "pot": pot, "hemo": hemo, "pcv": pcv, 
-                    "wc": wc, "rc": rc, "htn": mapping[htn], "dm": mapping[dm], 
-                    "cad": mapping[cad], "appet": mapping[appet], "pe": mapping[pe], 
-                    "ane": mapping[ane]
+                    "age": age, "bp": bp, "sc": sc, "hemo": hemo, "bgr": bgr, 
+                    "bu": bu, "sg": sg, "al": al, "htn": mapping[htn],
+                    "su": su, "rbc": mapping[rbc], "pc": mapping[pc], 
+                    "pcc": mapping[pcc], "ba": mapping[ba], "sod": sod,
+                    "pot": pot, "pcv": pcv, "wc": wc, "rc": rc, 
+                    "dm": mapping[dm], "cad": mapping[cad], "appet": mapping[appet],
+                    "pe": mapping[pe], "ane": mapping[ane]
                 }
-
-                # 3. DYNAMIC ALIGNMENT (Prevents KeyError)
-                # Get the exact list of features the model was trained on
+                
+                # Align with expected features
                 expected_features = scaler.feature_names_in_
-                
-                # Create a base dataframe with all 0s for expected features
                 df_final = pd.DataFrame(0, index=[0], columns=expected_features)
-                
-                # Fill in the values we actually collected from the user
                 for col in expected_features:
-                    if col in user_data:
+                    if col in user_data: 
                         df_final[col] = user_data[col]
                 
-                # 4. PREDICTION
+                # Predict
                 scaled_input = scaler.transform(df_final)
                 prob = rf_model.predict_proba(scaled_input)[0][1]
-
-                # --- RESULTS & EDUCATION DISPLAY ---
-                st.markdown("---")
-                res_col1, res_col2 = st.columns([1, 1])
                 
-                with res_col1:
-                    st.metric("Total Risk Probability", f"{prob*100:.2f}%")
-                    if prob > 0.7:
-                        st.error("🚨 HIGH RISK: Kidney function may be significantly impaired.")
-                    elif prob > 0.3:
-                        st.warning("⚠️ MODERATE RISK: Early markers of kidney stress detected.")
-                    else:
-                        st.success("✅ LOW RISK: Your markers are within a healthy range.")
+                # Store in session state to persist outside the form refresh
+                st.session_state.last_prob = prob
+                st.session_state.last_metrics = {"age": age, "bp": bp, "sc": sc, "hemo": hemo}
                 
-                with res_col2:
-                    # Insert clinical diagram for context
-                    st.caption("AI risk scores often correlate with the GFR stages shown above.")
-
-                # 5. DATABASE & FOLLOW-UP (Restored from your original code)
+                # Database Update
                 v_num, next_v = calculate_followup(prob, st.session_state.username)
+                st.session_state.next_v = next_v
                 cursor.execute("""INSERT INTO predictions 
                     (username, model_used, probability, prediction, visit_number, next_visit, created_at, age, bp, bgr, bu, sc, hemo)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", 
-                    (st.session_state.username, "Random Forest", prob, 1 if prob > 0.5 else 0, v_num, str(next_v), str(datetime.now()), age, bp, bgr, bu, sc, hemo))
+                    (st.session_state.username, "Random Forest", prob, 1 if prob > 0.5 else 0, 
+                     v_num, str(next_v), str(datetime.now()), age, bp, bgr, bu, sc, hemo))
                 conn.commit()
+                
+                st.rerun()  # Rerun to show results immediately
 
-                # 6. REPORT GENERATION
-                report_metrics = {"age": age, "bp": bp, "sc": sc, "hemo": hemo}
-                pdf_data = generate_medical_pdf(st.session_state.username, prob, next_v, report_metrics)
-                st.download_button("📩 Download Professional Medical Report", data=pdf_data, file_name=f"CKD_Analysis_{st.session_state.username}.pdf")
-            else:
-                st.error("CRITICAL ERROR: Machine Learning assets (Model/Scaler) not found.")
+        # Display results only if a prediction exists
+        if "last_prob" in st.session_state:
+            prob = st.session_state.last_prob
+            st.markdown("---")
+            res_col1, res_col2 = st.columns(2)
+            
+            with res_col1:
+                st.metric("Risk Score", f"{prob*100:.1f}%")
+                if prob > 0.7: 
+                    st.error("🚨 High Risk Alert")
+                elif prob > 0.3: 
+                    st.warning("⚠️ Moderate Risk")
+                else: 
+                    st.success("✅ Low Risk")
+                
+                # PDF BUTTON (NOW SAFELY OUTSIDE THE FORM)
+                if "next_v" in st.session_state and "last_metrics" in st.session_state:
+                    pdf_data = generate_medical_pdf(
+                        st.session_state.username, 
+                        prob, 
+                        st.session_state.next_v, 
+                        st.session_state.last_metrics
+                    )
+                    st.download_button(
+                        "📩 Download Medical Report", 
+                        data=pdf_data, 
+                        file_name=f"CKD_Report_{st.session_state.username}.pdf"
+                    )
+
+            with res_col2:
+                if "next_v" in st.session_state:
+                    st.info(f"📅 Recommended Follow-up: {st.session_state.next_v}")
 
 # =====================================================
 # DOCTOR DASHBOARD

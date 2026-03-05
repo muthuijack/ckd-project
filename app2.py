@@ -162,10 +162,6 @@ def patient_page():
         This analysis requires data from your **Complete Blood Count (CBC)** and **Urine Routine Examination**.
         Hover over the **(?)** icons for specific medical context.
         """)
-        
-
-[Image of the human kidney system and its function]
-
 
     # --- MAIN DATA ENTRY FORM ---
     with st.form("comprehensive_form"):
@@ -298,3 +294,4 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+

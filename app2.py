@@ -324,3 +324,4 @@ else:
     if st.session_state.role == "patient": patient_page()
     else: doctor_dashboard()
 
+

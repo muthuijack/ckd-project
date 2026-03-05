@@ -1,12 +1,9 @@
-streamlit>=1.32
-numpy
+streamlit
 pandas
-scikit-learn>=1.4
+numpy
+scikit-learn
 joblib
-tensorflow>=2.15
 matplotlib
-seaborn
-shap
-sqlite-utils
-reportlab
- FPDF
+mysql-connector-python
+twilio
+fpdf

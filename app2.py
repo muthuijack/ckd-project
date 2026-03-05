@@ -8,124 +8,138 @@ import matplotlib.pyplot as plt
 import joblib
 import io
 
-# PDF
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
 
-# =====================================================
+# =============================================
 # PAGE CONFIG
-# =====================================================
+# =============================================
 
 st.set_page_config(
-    page_title="AI CKD Monitoring System",
+    page_title="AI CKD Hospital System",
     layout="wide",
     page_icon="🏥"
 )
 
-# =====================================================
-# DATABASE (SUPERVISOR CAN ACCESS THIS FILE)
-# =====================================================
+# =============================================
+# HOSPITAL THEME
+# =============================================
 
-DB_FILE = "ckd_database.db"
+st.markdown("""
+<style>
 
-conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-cursor = conn.cursor()
+[data-testid="stSidebar"]{
+background-color:#0e4c92;
+}
 
-# USERS TABLE
+[data-testid="stSidebar"] *{
+color:white;
+}
+
+.main{
+background-color:#f5f9ff;
+}
+
+h1,h2,h3{
+color:#0e4c92;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =============================================
+# DATABASE
+# =============================================
+
+DB_FILE="ckd_database.db"
+
+conn=sqlite3.connect(DB_FILE,check_same_thread=False)
+cursor=conn.cursor()
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT,
-    role TEXT,
-    phone TEXT,
-    created_at TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+username TEXT UNIQUE,
+password TEXT,
+role TEXT,
+phone TEXT,
+created_at TEXT
 )
 """)
 
-# PREDICTIONS TABLE
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS predictions(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT,
-    model_used TEXT,
-    probability REAL,
-    prediction INTEGER,
-    visit_number INTEGER,
-    next_visit TEXT,
-    created_at TEXT
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+username TEXT,
+model_used TEXT,
+probability REAL,
+prediction INTEGER,
+visit_number INTEGER,
+next_visit TEXT,
+created_at TEXT
 )
 """)
 
 conn.commit()
 
-# =====================================================
+# =============================================
 # LANGUAGE SYSTEM
-# =====================================================
+# =============================================
 
-LANGUAGES = {
+LANGUAGES={
 
 "English":{
-
-"about":"CKD is a long-term condition where kidneys gradually lose their function.",
-
-"low":"Low Risk - Maintain healthy lifestyle",
-
-"moderate":"Moderate Risk - Monitor regularly",
-
-"high":"High Risk - Seek medical attention",
-
+"about":"Chronic Kidney Disease is a long term condition where kidneys slowly lose function.",
+"low":"Low CKD Risk",
+"moderate":"Moderate CKD Risk",
+"high":"High CKD Risk",
 "download":"Download Medical Report"
-
 },
 
 "French":{
-
 "about":"La maladie rénale chronique est une perte progressive de la fonction rénale.",
-
 "low":"Risque faible",
-
 "moderate":"Risque modéré",
-
 "high":"Risque élevé",
-
 "download":"Télécharger le rapport"
-
 }
 
 }
 
-# =====================================================
+# =============================================
 # PASSWORD HASH
-# =====================================================
+# =============================================
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# =====================================================
-# LOAD ML MODEL
-# =====================================================
+# =============================================
+# LOAD ML MODELS
+# =============================================
 
 @st.cache_resource
 def load_models():
 
-    model=None
-    scaler=None
+    models={}
 
     if os.path.exists("ckd_random_forest.pkl"):
-        model=joblib.load("ckd_random_forest.pkl")
+        models["Random Forest"]=joblib.load("ckd_random_forest.pkl")
+
+    if os.path.exists("ckd_logistic.pkl"):
+        models["Logistic Regression"]=joblib.load("ckd_logistic.pkl")
+
+    scaler=None
 
     if os.path.exists("scaler.pkl"):
         scaler=joblib.load("scaler.pkl")
 
-    return model,scaler
+    return models,scaler
 
-rf_model,scaler=load_models()
+models,scaler=load_models()
 
-# =====================================================
+# =============================================
 # SEVERITY GRAPH
-# =====================================================
+# =============================================
 
 def show_severity(prob):
 
@@ -137,24 +151,21 @@ def show_severity(prob):
 
     ax.set_xlim(0,100)
 
-    ax.set_title("CKD Severity Scale")
+    ax.set_title("CKD Risk Severity")
 
     st.pyplot(fig)
 
     st.metric("Risk Probability",f"{percent:.2f}%")
 
-# =====================================================
-# VISIT FREQUENCY LOGIC
-# =====================================================
+# =============================================
+# VISIT PREDICTION
+# =============================================
 
 def calculate_followup(prob,username):
 
     visit_count=cursor.execute(
-
     "SELECT COUNT(*) FROM predictions WHERE username=?",
-
     (username,)
-
     ).fetchone()[0]
 
     percent=prob*100
@@ -170,27 +181,24 @@ def calculate_followup(prob,username):
 
     return visit_count+1,next_visit.date()
 
-# =====================================================
-# SMS REMINDER SIMULATION
-# =====================================================
+# =============================================
+# SMS SIMULATION
+# =============================================
 
 def send_sms(username,next_visit):
 
     phone=cursor.execute(
-
     "SELECT phone FROM users WHERE username=?",
-
     (username,)
-
     ).fetchone()
 
     if phone and phone[0]:
 
-        st.success(f"📩 SMS reminder sent to {phone[0]} for next visit {next_visit}")
+        st.success(f"SMS Reminder sent to {phone[0]} for visit on {next_visit}")
 
-# =====================================================
+# =============================================
 # PDF REPORT
-# =====================================================
+# =============================================
 
 def generate_pdf(username,prob,next_visit):
 
@@ -202,19 +210,14 @@ def generate_pdf(username,prob,next_visit):
 
     elements=[]
 
-    elements.append(Paragraph("AI CKD Medical Report",styles["Title"]))
-
+    elements.append(Paragraph("AI CKD Hospital Report",styles["Title"]))
     elements.append(Spacer(1,20))
 
     elements.append(Paragraph(f"Patient: {username}",styles["Normal"]))
-
     elements.append(Paragraph(f"Risk Probability: {prob*100:.2f}%",styles["Normal"]))
-
     elements.append(Paragraph(f"Next Visit: {next_visit}",styles["Normal"]))
-
     elements.append(Spacer(1,20))
-
-    elements.append(Paragraph("Generated by AI CKD Monitoring System",styles["Italic"]))
+    elements.append(Paragraph("Generated by AI CKD Hospital System",styles["Italic"]))
 
     doc.build(elements)
 
@@ -222,43 +225,38 @@ def generate_pdf(username,prob,next_visit):
 
     return buffer
 
-# =====================================================
-# SESSION STATE
-# =====================================================
+# =============================================
+# SESSION
+# =============================================
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in=False
 
-# =====================================================
-# LOGIN / REGISTER
-# =====================================================
+# =============================================
+# LOGIN PAGE
+# =============================================
 
 def login_page():
 
-    st.title("🏥 AI CKD Monitoring System")
+    st.title("🏥 AI CKD Hospital System")
 
     option=st.radio("Select Option",["Login","Register"])
 
     username=st.text_input("Username")
-
     password=st.text_input("Password",type="password")
 
     if option=="Register":
 
         role=st.selectbox("Role",["patient","doctor"])
-
-        phone=st.text_input("Phone Number")
+        phone=st.text_input("Phone")
 
         if st.button("Register"):
 
             try:
 
                 cursor.execute("""
-
                 INSERT INTO users(username,password,role,phone,created_at)
-
                 VALUES(?,?,?,?,?)
-
                 """,(username,hash_password(password),role,phone,str(datetime.now())))
 
                 conn.commit()
@@ -274,38 +272,37 @@ def login_page():
         if st.button("Login"):
 
             user=cursor.execute("""
-
             SELECT * FROM users WHERE username=? AND password=?
-
             """,(username,hash_password(password))).fetchone()
 
             if user:
 
                 st.session_state.logged_in=True
-
                 st.session_state.username=user[1]
-
                 st.session_state.role=user[3]
 
                 st.rerun()
 
             else:
 
-                st.error("Invalid login")
+                st.error("Invalid credentials")
 
-# =====================================================
+# =============================================
 # PATIENT PAGE
-# =====================================================
+# =============================================
 
 def patient_page():
 
     st.sidebar.title("Patient Panel")
 
-    language=st.sidebar.selectbox("Select Language",list(LANGUAGES.keys()))
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in=False
+        st.rerun()
 
+    language=st.sidebar.selectbox("Language",list(LANGUAGES.keys()))
     text=LANGUAGES[language]
 
-    st.title("CKD Risk Prediction")
+    st.title("CKD AI Risk Prediction")
 
     col1,col2,col3=st.columns(3)
 
@@ -314,155 +311,100 @@ def patient_page():
         st.write(text["about"])
 
     with col2:
-        st.subheader("Common Causes")
+        st.subheader("Causes")
 
-        st.markdown("""
-
-        - Diabetes
-
-        - High Blood Pressure
-
-        - Genetic Disorders
-
-        - Kidney Infection
-
-        """)
+        st.write("""
+Diabetes  
+High Blood Pressure  
+Kidney Infection  
+Genetic Disorders
+""")
 
     with col3:
-
         st.subheader("Symptoms")
 
-        st.markdown("""
-
-        - Swelling
-
-        - Fatigue
-
-        - Urination changes
-
-        - Nausea
-
-        """)
+        st.write("""
+Fatigue  
+Swelling  
+Urination Changes  
+Nausea
+""")
 
     st.markdown("---")
 
-    st.subheader("Enter Medical Information")
+    model_choice=st.selectbox("Select AI Model",list(models.keys()))
 
-    age=st.number_input("Age",1,120,45)
-
+    age=st.number_input("Age",1,120,40)
     bp=st.number_input("Blood Pressure",50,200,80)
-
     bgr=st.number_input("Blood Glucose",50,500,120)
-
     bu=st.number_input("Blood Urea",1,400,40)
-
     sc=st.number_input("Serum Creatinine",0.1,20.0,1.2)
-
     hemo=st.number_input("Hemoglobin",3.0,20.0,13.5)
 
-    if st.button("Predict"):
+    if st.button("Predict CKD Risk"):
+
+        model=models[model_choice]
 
         df=pd.DataFrame([{
-
         "age":age,
-
         "bp":bp,
-
         "bgr":bgr,
-
         "bu":bu,
-
         "sc":sc,
-
         "hemo":hemo
-
         }])
 
-        features=scaler.feature_names_in_
+        scaled=scaler.transform(df)
 
-        aligned=pd.DataFrame(0,index=[0],columns=features)
-
-        for col in df.columns:
-
-            if col in features:
-
-                aligned[col]=df[col]
-
-        scaled=scaler.transform(aligned)
-
-        prob=float(rf_model.predict_proba(scaled)[0][1])
-
-        prob=max(0,min(1,prob))
-
-        st.subheader("Risk Analysis")
+        prob=float(model.predict_proba(scaled)[0][1])
 
         show_severity(prob)
 
         visit_number,next_visit=calculate_followup(prob,st.session_state.username)
 
         cursor.execute("""
-
         INSERT INTO predictions
-
         (username,model_used,probability,prediction,visit_number,next_visit,created_at)
-
         VALUES(?,?,?,?,?,?,?)
-
-        """,(st.session_state.username,"Random Forest",prob,
-
-        1 if prob>0.5 else 0,
-
-        visit_number,
-
-        str(next_visit),
-
-        str(datetime.now())))
+        """,(st.session_state.username,model_choice,prob,1 if prob>0.5 else 0,
+        visit_number,str(next_visit),str(datetime.now())))
 
         conn.commit()
 
         send_sms(st.session_state.username,next_visit)
 
         if prob<0.3:
-
             st.success(text["low"])
-
         elif prob<0.7:
-
             st.warning(text["moderate"])
-
         else:
-
             st.error(text["high"])
 
         pdf=generate_pdf(st.session_state.username,prob,next_visit)
 
         st.download_button(
-
-        label=text["download"],
-
-        data=pdf,
-
-        file_name="ckd_report.pdf",
-
-        mime="application/pdf"
-
+        text["download"],
+        pdf,
+        "ckd_report.pdf"
         )
 
-# =====================================================
+# =============================================
 # DOCTOR DASHBOARD
-# =====================================================
+# =============================================
 
 def doctor_page():
 
-    st.title("Doctor Dashboard")
+    st.sidebar.title("Doctor Panel")
+
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in=False
+        st.rerun()
+
+    st.title("Hospital CKD Dashboard")
 
     data=pd.read_sql("SELECT * FROM predictions",conn)
 
-    if data.empty:
-
-        st.info("No predictions yet")
-
-        return
+    st.subheader("Patient Database")
 
     st.dataframe(data)
 
@@ -474,9 +416,9 @@ def doctor_page():
 
     st.line_chart(data["probability"])
 
-# =====================================================
+# =============================================
 # ROUTING
-# =====================================================
+# =============================================
 
 if not st.session_state.logged_in:
 
@@ -485,9 +427,7 @@ if not st.session_state.logged_in:
 else:
 
     if st.session_state.role=="patient":
-
         patient_page()
 
     else:
-
         doctor_page()

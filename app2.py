@@ -212,7 +212,7 @@ def patient_page():
     # =============================================
     # 3. PREDICTION LOGIC (Remains the same)
     # =============================================
-     if st.button("Run AI Analysis"):
+    if st.button("Run AI Analysis"):
         if rf_model and scaler:
             # 1. Feature Alignment (Crucial Step)
             features = scaler.feature_names_in_
@@ -297,5 +297,6 @@ if __name__ == "__main__":
             patient_dashboard()
         else:
             doctor_dashboard()
+
 
 

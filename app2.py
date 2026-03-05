@@ -211,20 +211,20 @@ def patient_page():
 
         submit = st.form_submit_button("🚀 GENERATE AI ANALYSIS")
         if submit:
-        if rf_model and scaler:
+            if rf_model and scaler:
             # 1. Binary Mapping for Categorical Data
-            mapping = {"yes": 1, "no": 0, "normal": 1, "abnormal": 0, 
+                mapping = {"yes": 1, "no": 0, "normal": 1, "abnormal": 0, 
                        "present": 1, "notpresent": 0, "good": 1, "poor": 0}
             
             # 2. Collect all UI inputs into a dictionary
-            user_data = {
-                "age": age, "bp": bp, "sg": sg, "al": al, "su": su, 
-                "rbc": mapping[rbc], "pc": mapping[pc], "pcc": mapping[pcc], 
-                "ba": mapping[ba], "bgr": bgr, "bu": bu, "sc": sc, 
-                "sod": sod, "pot": pot, "hemo": hemo, "pcv": pcv, 
-                "wc": wc, "rc": rc, "htn": mapping[htn], "dm": mapping[dm], 
-                "cad": mapping[cad], "appet": mapping[appet], "pe": mapping[pe], 
-                "ane": mapping[ane]
+                user_data = {
+                    "age": age, "bp": bp, "sg": sg, "al": al, "su": su, 
+                    "rbc": mapping[rbc], "pc": mapping[pc], "pcc": mapping[pcc], 
+                    "ba": mapping[ba], "bgr": bgr, "bu": bu, "sc": sc, 
+                    "sod": sod, "pot": pot, "hemo": hemo, "pcv": pcv, 
+                    "wc": wc, "rc": rc, "htn": mapping[htn], "dm": mapping[dm], 
+                    "cad": mapping[cad], "appet": mapping[appet], "pe": mapping[pe], 
+                    "ane": mapping[ane]
             }
 
             # 3. DYNAMIC ALIGNMENT (Prevents KeyError)
@@ -313,6 +313,7 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+
 
 
 

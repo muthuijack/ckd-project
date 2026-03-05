@@ -157,8 +157,6 @@ def patient_dashboard():
     # Education Header
     
 
-[Image of the human kidney system and its function]
-
     st.title("🔍 Kidney Risk Assessment")
     
     with st.expander("Why are these values important?"):
@@ -260,3 +258,4 @@ if __name__ == "__main__":
             patient_dashboard()
         else:
             doctor_dashboard()
+

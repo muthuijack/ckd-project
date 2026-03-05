@@ -204,19 +204,24 @@ def patient_page():
         st.divider()
         
         h1, h2, h3, h4 = st.columns(4)
-        with h1: cad = st.selectbox("CAD Disease", ["yes", "no"])
-        with h2: appet = st.selectbox("Appetite", ["good", "poor"])
-        with h3: pe = st.selectbox("Pedal Edema", ["yes", "no"])
-        with h4: ane = st.selectbox("Anemia", ["yes", "no"])
+        with h1: 
+            cad = st.selectbox("CAD Disease", ["yes", "no"])
+        with h2: 
+            appet = st.selectbox("Appetite", ["good", "poor"])
+        with h3: 
+            pe = st.selectbox("Pedal Edema", ["yes", "no"])
+        with h4: 
+            ane = st.selectbox("Anemia", ["yes", "no"])
 
         submit = st.form_submit_button("🚀 GENERATE AI ANALYSIS")
+        
         if submit:
             if rf_model and scaler:
-            # 1. Binary Mapping for Categorical Data
+                # 1. Binary Mapping for Categorical Data
                 mapping = {"yes": 1, "no": 0, "normal": 1, "abnormal": 0, 
-                       "present": 1, "notpresent": 0, "good": 1, "poor": 0}
-            
-            # 2. Collect all UI inputs into a dictionary
+                           "present": 1, "notpresent": 0, "good": 1, "poor": 0}
+                
+                # 2. Collect all UI inputs into a dictionary
                 user_data = {
                     "age": age, "bp": bp, "sg": sg, "al": al, "su": su, 
                     "rbc": mapping[rbc], "pc": mapping[pc], "pcc": mapping[pcc], 
@@ -225,60 +230,55 @@ def patient_page():
                     "wc": wc, "rc": rc, "htn": mapping[htn], "dm": mapping[dm], 
                     "cad": mapping[cad], "appet": mapping[appet], "pe": mapping[pe], 
                     "ane": mapping[ane]
-            }
+                }
 
-            # 3. DYNAMIC ALIGNMENT (Prevents KeyError)
-            # Get the exact list of features the model was trained on
-            expected_features = scaler.feature_names_in_
-            
-            # Create a base dataframe with all 0s for expected features
-            df_final = pd.DataFrame(0, index=[0], columns=expected_features)
-            
-            # Fill in the values we actually collected from the user
-            for col in expected_features:
-                if col in user_data:
-                    df_final[col] = user_data[col]
-            
-            # 4. PREDICTION
-            scaled_input = scaler.transform(df_final)
-            prob = rf_model.predict_proba(scaled_input)[0][1]
-
-            # --- RESULTS & EDUCATION DISPLAY ---
-            st.markdown("---")
-            res_col1, res_col2 = st.columns([1, 1])
-            
-            with res_col1:
-                st.metric("Total Risk Probability", f"{prob*100:.2f}%")
-                if prob > 0.7:
-                    st.error("🚨 HIGH RISK: Kidney function may be significantly impaired.")
-                elif prob > 0.3:
-                    st.warning("⚠️ MODERATE RISK: Early markers of kidney stress detected.")
-                else:
-                    st.success("✅ LOW RISK: Your markers are within a healthy range.")
-            
-            with res_col2:
-                # Insert clinical diagram for context
+                # 3. DYNAMIC ALIGNMENT (Prevents KeyError)
+                # Get the exact list of features the model was trained on
+                expected_features = scaler.feature_names_in_
                 
+                # Create a base dataframe with all 0s for expected features
+                df_final = pd.DataFrame(0, index=[0], columns=expected_features)
+                
+                # Fill in the values we actually collected from the user
+                for col in expected_features:
+                    if col in user_data:
+                        df_final[col] = user_data[col]
+                
+                # 4. PREDICTION
+                scaled_input = scaler.transform(df_final)
+                prob = rf_model.predict_proba(scaled_input)[0][1]
 
-#[Image of stages of chronic kidney disease and GFR levels]
+                # --- RESULTS & EDUCATION DISPLAY ---
+                st.markdown("---")
+                res_col1, res_col2 = st.columns([1, 1])
+                
+                with res_col1:
+                    st.metric("Total Risk Probability", f"{prob*100:.2f}%")
+                    if prob > 0.7:
+                        st.error("🚨 HIGH RISK: Kidney function may be significantly impaired.")
+                    elif prob > 0.3:
+                        st.warning("⚠️ MODERATE RISK: Early markers of kidney stress detected.")
+                    else:
+                        st.success("✅ LOW RISK: Your markers are within a healthy range.")
+                
+                with res_col2:
+                    # Insert clinical diagram for context
+                    st.caption("AI risk scores often correlate with the GFR stages shown above.")
 
-                st.caption("AI risk scores often correlate with the GFR stages shown above.")
+                # 5. DATABASE & FOLLOW-UP (Restored from your original code)
+                v_num, next_v = calculate_followup(prob, st.session_state.username)
+                cursor.execute("""INSERT INTO predictions 
+                    (username, model_used, probability, prediction, visit_number, next_visit, created_at, age, bp, bgr, bu, sc, hemo)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", 
+                    (st.session_state.username, "Random Forest", prob, 1 if prob > 0.5 else 0, v_num, str(next_v), str(datetime.now()), age, bp, bgr, bu, sc, hemo))
+                conn.commit()
 
-            # 5. DATABASE & FOLLOW-UP (Restored from your original code)
-            v_num, next_v = calculate_followup(prob, st.session_state.username)
-            cursor.execute("""INSERT INTO predictions 
-                (username, model_used, probability, prediction, visit_number, next_visit, created_at, age, bp, bgr, bu, sc, hemo)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", 
-                (st.session_state.username, "Random Forest", prob, 1 if prob > 0.5 else 0, v_num, str(next_v), str(datetime.now()), age, bp, bgr, bu, sc, hemo))
-            conn.commit()
-
-            # 6. REPORT GENERATION
-            report_metrics = {"age": age, "bp": bp, "sc": sc, "hemo": hemo}
-            pdf_data = generate_medical_pdf(st.session_state.username, prob, next_v, report_metrics)
-            st.download_button("📩 Download Professional Medical Report", data=pdf_data, file_name=f"CKD_Analysis_{st.session_state.username}.pdf")
-            
-        else:
-            st.error("CRITICAL ERROR: Machine Learning assets (Model/Scaler) not found.")
+                # 6. REPORT GENERATION
+                report_metrics = {"age": age, "bp": bp, "sc": sc, "hemo": hemo}
+                pdf_data = generate_medical_pdf(st.session_state.username, prob, next_v, report_metrics)
+                st.download_button("📩 Download Professional Medical Report", data=pdf_data, file_name=f"CKD_Analysis_{st.session_state.username}.pdf")
+            else:
+                st.error("CRITICAL ERROR: Machine Learning assets (Model/Scaler) not found.")
 
 # =====================================================
 # DOCTOR DASHBOARD
@@ -304,7 +304,8 @@ def doctor_dashboard():
 # =====================================================
 # MAIN ROUTING
 # =====================================================
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "logged_in" not in st.session_state: 
+    st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
     auth_page()
@@ -313,7 +314,3 @@ else:
         patient_page()
     else:
         doctor_dashboard()
-
-
-
-

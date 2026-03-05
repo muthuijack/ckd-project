@@ -286,17 +286,18 @@ def doctor_dashboard():
     else:
         st.info("No clinical data recorded yet.")
 
-# =====================================================
-# MAIN ROUTING
-# =====================================================
-if __name__ == "__main__":
-    if not st.session_state.get("logged_in"):
-        auth_page()
+# =============================================
+# ROUTING (CHECK NAMES HERE)
+# =============================================
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    login_page()
+else:
+    if st.session_state.role == "patient":
+        patient_page()  # <--- MUST MATCH FUNCTION NAME ABOVE
     else:
-        if st.session_state.role == "patient":
-            patient_dashboard()
-        else:
-            doctor_dashboard()
+        doctor_page()
 
 
 

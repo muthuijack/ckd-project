@@ -302,6 +302,13 @@ def patient_page():
 # DOCTOR DASHBOARD (MYSQL VERSION)
 # =====================================================
 def doctor_dashboard():
+    # --- ADD THIS LOGOUT SECTION ---
+    st.sidebar.title(f"Staff: {st.session_state.username}")
+    st.sidebar.write(f"Role: {st.session_state.role.upper()}")
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+    # -------------------------------
     st.title("👨‍⚕️ Clinical Supervisor Dashboard")
     db = get_db_connection()
     data = pd.read_sql("SELECT * FROM predictions", db)
@@ -323,5 +330,6 @@ if not st.session_state.logged_in: auth_page()
 else:
     if st.session_state.role == "patient": patient_page()
     else: doctor_dashboard()
+
 
 

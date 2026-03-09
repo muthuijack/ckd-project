@@ -17,15 +17,35 @@ from reportlab.lib.units import inch
 # =====================================================
 # PAGE CONFIG & THEME
 # =====================================================
-st.set_page_config(page_title="NephroAI | Clinical Hospital System", layout="wide", page_icon="🏥")
+st.set_page_config(
+    page_title="NephroAI | Clinical Hospital System", 
+    layout="wide", 
+    page_icon="🏥"
+)
 
 st.markdown("""
 <style>
     .main { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #004a99; color: white; font-weight: bold; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    [data-testid="stSidebar"] { background-color: #002b5c; }
-    [data-testid="stSidebar"] * { color: white !important; }
+    .stButton>button { 
+        width: 100%; 
+        border-radius: 5px; 
+        height: 3em; 
+        background-color: #004a99; 
+        color: white; 
+        font-weight: bold; 
+    }
+    .stMetric { 
+        background-color: #ffffff; 
+        padding: 15px; 
+        border-radius: 10px; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+    }
+    [data-testid="stSidebar"] { 
+        background-color: #002b5c; 
+    }
+    [data-testid="stSidebar"] * { 
+        color: white !important; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -44,6 +64,7 @@ def get_db_connection():
 def init_db():
     db = get_db_connection()
     cursor = db.cursor()
+    
     # Ensure users table is permanent
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users(
@@ -54,6 +75,7 @@ def init_db():
         phone VARCHAR(20), 
         created_at TEXT
     )""")
+    
     # Ensure clinical predictions are saved forever
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS predictions(
@@ -72,6 +94,7 @@ def init_db():
         sc REAL, 
         hemo REAL
     )""")
+    
     db.commit()
     cursor.close()
     db.close()
@@ -98,9 +121,11 @@ def calculate_followup(prob, username):
     cursor.execute("SELECT COUNT(*) FROM predictions WHERE username=%s", (username,))
     visit_count = cursor.fetchone()[0]
     db.close()
+    
     percent = prob * 100
     days = 180 if percent < 30 else (30 if percent < 70 else 7)
     next_visit = datetime.now() + timedelta(days=days)
+    
     return visit_count + 1, next_visit.date()
 
 # =====================================================
@@ -111,25 +136,34 @@ def generate_medical_pdf(username, prob, next_visit, metrics):
     doc = SimpleDocTemplate(buffer)
     styles = getSampleStyleSheet()
     elements = []
+    
     elements.append(Paragraph("OFFICIAL NEPHROLOGY ANALYSIS REPORT", styles["Title"]))
     elements.append(Spacer(1, 12))
     elements.append(Paragraph(f"Patient ID: {username}", styles["Normal"]))
     elements.append(Paragraph(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d')}", styles["Normal"]))
     elements.append(Spacer(1, 12))
-    data = [["Clinical Parameter", "Value"],
-            ["Age", metrics['age']],
-            ["Blood Pressure", f"{metrics['bp']} mmHg"],
-            ["Serum Creatinine", f"{metrics['sc']} mg/dl"],
-            ["Hemoglobin", f"{metrics['hemo']} g/dL"],
-            ["AI Risk Probability", f"{prob*100:.2f}%"]]
+    
+    data = [
+        ["Clinical Parameter", "Value"],
+        ["Age", metrics['age']],
+        ["Blood Pressure", f"{metrics['bp']} mmHg"],
+        ["Serum Creatinine", f"{metrics['sc']} mg/dl"],
+        ["Hemoglobin", f"{metrics['hemo']} g/dL"],
+        ["AI Risk Probability", f"{prob*100:.2f}%"]
+    ]
+    
     t = Table(data, colWidths=[2.5*inch, 2*inch])
-    t.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, 0), colors.dodgerblue),
-                           ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                           ('GRID', (0,0), (-1,-1), 1, colors.grey)]))
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.dodgerblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('GRID', (0,0), (-1,-1), 1, colors.grey)
+    ]))
+    
     elements.append(t)
     elements.append(Spacer(1, 20))
     elements.append(Paragraph(f"Recommended Follow-up: {next_visit}", styles["Heading3"]))
     elements.append(Paragraph("Note: AI-generated report for clinical review.", styles["Italic"]))
+    
     doc.build(elements)
     buffer.seek(0)
     return buffer
@@ -139,82 +173,107 @@ def generate_medical_pdf(username, prob, next_visit, metrics):
 # =====================================================
 def auth_page():
     col1, col2 = st.columns([1, 1])
+    
     with col1:
         st.image("https://cdn-icons-png.flaticon.com/512/2966/2966327.png", width=150)
         st.title("NephroAI Hospital System")
+    
     with col2:
         tab1, tab2 = st.tabs(["Login", "Register"])
+        
         with tab1:
             u = st.text_input("Username", key="l_u")
             p = st.text_input("Password", type="password", key="l_p")
+            
             if st.button("Sign In"):
                 db = get_db_connection()
                 cursor = db.cursor(dictionary=True)
-                cursor.execute("SELECT * FROM users WHERE username=%s AND password=%s", (u, hash_password(p)))
+                cursor.execute(
+                    "SELECT * FROM users WHERE username=%s AND password=%s", 
+                    (u, hash_password(p))
+                )
                 user = cursor.fetchone()
                 db.close()
+                
                 if user:
                     st.session_state.logged_in = True
                     st.session_state.username = user['username']
                     st.session_state.role = user['role']
                     st.rerun()
-                else: st.error("Invalid Credentials")
-        with tab2:
-    new_u = st.text_input("New Username")
-    new_p = st.text_input("New Password", type="password")
-    role = st.selectbox("Role", ["patient", "doctor"])
-    phone = st.text_input("Phone Number")
-    
-    # --- ADDED SECURITY QUESTIONS ---
-    s_ques = st.selectbox("Security Question", [
-        "What was the name of your first pet?",
-        "What is your mother's maiden name?",
-        "What was the model of your first car?",
-        "In what city were you born?"
-    ])
-    s_ans = st.text_input("Answer to Security Question")
-    # --------------------------------
-
-    if st.button("Register Account"):
-        db = get_db_connection()
-        cursor = db.cursor()
-        try:
-            # Added s_ques and s_ans to the INSERT query
-            query = "INSERT INTO users(username,password,role,phone,security_question,security_answer,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s)"
-            cursor.execute(query, (new_u, hash_password(new_p), role, phone, s_ques, s_ans.lower().strip(), str(datetime.now())))
-            db.commit()
-            st.success("Registration Successful!")
-        except Exception as e:
-            st.error(f"Error: {e}")
-        finally:
-            db.close()
-            st.markdown("---")
-with st.expander("🔑 Forgot Password?"):
-    reset_u = st.text_input("Enter Username to Reset")
-    if reset_u:
-        db = get_db_connection()
-        cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT security_question, security_answer FROM users WHERE username=%s", (reset_u,))
-        user_data = cursor.fetchone()
-        db.close()
+                else: 
+                    st.error("Invalid Credentials")
         
-        if user_data:
-            st.write(f"**Security Question:** {user_data['security_question']}")
-            user_ans = st.text_input("Your Answer", key="reset_ans")
-            new_reset_p = st.text_input("New Password", type="password", key="new_p_reset")
+        with tab2:
+            new_u = st.text_input("New Username")
+            new_p = st.text_input("New Password", type="password")
+            role = st.selectbox("Role", ["patient", "doctor"])
+            phone = st.text_input("Phone Number")
             
-            if st.button("Reset My Password"):
-                if user_ans.lower().strip() == user_data['security_answer']:
-                    db = get_db_connection()
-                    cursor = db.cursor()
-                    cursor.execute("UPDATE users SET password=%s WHERE username=%s", (hash_password(new_reset_p), reset_u))
+            # --- ADDED SECURITY QUESTIONS ---
+            s_ques = st.selectbox("Security Question", [
+                "What was the name of your first pet?",
+                "What is your mother's maiden name?",
+                "What was the model of your first car?",
+                "In what city were you born?"
+            ])
+            s_ans = st.text_input("Answer to Security Question")
+            # --------------------------------
+
+            if st.button("Register Account"):
+                db = get_db_connection()
+                cursor = db.cursor()
+                try:
+                    # Added s_ques and s_ans to the INSERT query
+                    query = """INSERT INTO users(
+                        username, password, role, phone, security_question, 
+                        security_answer, created_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s)"""
+                    cursor.execute(query, (
+                        new_u, hash_password(new_p), role, phone, s_ques, 
+                        s_ans.lower().strip(), str(datetime.now())
+                    ))
                     db.commit()
+                    st.success("Registration Successful!")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                finally:
                     db.close()
-                    st.success("Password Reset Successfully! You can now log in.")
+        
+        st.markdown("---")
+        
+        with st.expander("🔑 Forgot Password?"):
+            reset_u = st.text_input("Enter Username to Reset")
+            
+            if reset_u:
+                db = get_db_connection()
+                cursor = db.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT security_question, security_answer FROM users WHERE username=%s", 
+                    (reset_u,)
+                )
+                user_data = cursor.fetchone()
+                db.close()
+                
+                if user_data:
+                    st.write(f"**Security Question:** {user_data['security_question']}")
+                    user_ans = st.text_input("Your Answer", key="reset_ans")
+                    new_reset_p = st.text_input("New Password", type="password", key="new_p_reset")
+                    
+                    if st.button("Reset My Password"):
+                        if user_ans.lower().strip() == user_data['security_answer']:
+                            db = get_db_connection()
+                            cursor = db.cursor()
+                            cursor.execute(
+                                "UPDATE users SET password=%s WHERE username=%s", 
+                                (hash_password(new_reset_p), reset_u)
+                            )
+                            db.commit()
+                            db.close()
+                            st.success("Password Reset Successfully! You can now log in.")
+                        else:
+                            st.error("Incorrect answer to security question.")
                 else:
-                    st.error("Incorrect answer to security question.")
-        else:
-            st.warning("Username not found.")
+                    st.warning("Username not found.")
 
 # =====================================================
 # PATIENT INTERFACE
@@ -225,10 +284,6 @@ def patient_page():
 
     with tabs[1]:
         st.subheader("Chronic Kidney Disease (CKD) Stages")
-        
-
-#[Image of stages of chronic kidney disease and GFR levels]
-
         st.markdown("""
         1. **Stage 1:** GFR >90 (Normal) | 2. **Stage 2:** GFR 60-89 (Mild) | 
         3. **Stage 3:** GFR 30-59 (Moderate) | 4. **Stage 4:** GFR 15-29 (Severe) | 
@@ -237,24 +292,23 @@ def patient_page():
 
     with tabs[2]:
         st.subheader("Kidney Function Guide")
-        
-
-#[Image of the human kidney system and its function]
-
         st.write("Your kidneys maintain your body's chemical balance by filtering waste.")
 
     with tabs[0]:
         with st.form("clinical_form"):
             st.subheader("Clinical Data Entry")
             c1, c2, c3 = st.columns(3)
+            
             with c1:
                 age = st.number_input("Age", 1, 120, 45)
                 bp = st.number_input("Blood Pressure", 50, 200, 120)
                 sc = st.number_input("Serum Creatinine", 0.1, 20.0, 1.2)
+            
             with c2:
                 hemo = st.number_input("Hemoglobin", 3.0, 20.0, 12.5)
                 bgr = st.number_input("Blood Glucose", 50, 500, 121)
                 bu = st.number_input("Blood Urea", 1, 400, 36)
+            
             with c3:
                 sg = st.selectbox("Specific Gravity", [1.005, 1.010, 1.015, 1.020, 1.025], index=3)
                 al = st.selectbox("Albumin", [0, 1, 2, 3, 4, 5])
@@ -262,26 +316,32 @@ def patient_page():
 
             st.subheader("Additional Parameters")
             c4, c5, c6 = st.columns(3)
+            
             with c4:
                 su = st.selectbox("Sugar", [0, 1, 2, 3, 4, 5])
                 rbc = st.selectbox("RBC in Urine", ["normal", "abnormal"])
                 pc = st.selectbox("Pus Cells", ["normal", "abnormal"])
+            
             with c5:
                 pcc = st.selectbox("Pus Cell Clumps", ["present", "notpresent"])
                 ba = st.selectbox("Bacteria", ["present", "notpresent"])
                 sod = st.number_input("Sodium", 100, 180, 137)
+            
             with c6:
                 pot = st.number_input("Potassium", 2.0, 10.0, 4.6)
                 pcv = st.number_input("Packed Cell Volume", 10, 60, 40)
                 wc = st.number_input("WBC Count", 2000, 25000, 8000)
 
             c7, c8, c9 = st.columns(3)
+            
             with c7:
                 rc = st.number_input("RBC Count", 2.0, 8.0, 4.7)
                 dm = st.selectbox("Diabetes", ["yes", "no"])
+            
             with c8:
                 cad = st.selectbox("CAD Disease", ["yes", "no"])
                 appet = st.selectbox("Appetite", ["good", "poor"])
+            
             with c9:
                 pe = st.selectbox("Pedal Edema", ["yes", "no"])
                 ane = st.selectbox("Anemia", ["yes", "no"])
@@ -290,32 +350,47 @@ def patient_page():
 
         if submit:
             if rf_model and scaler:
-                mapping = {"yes": 1, "no": 0, "normal": 1, "abnormal": 0, "present": 1, "notpresent": 0, "good": 1, "poor": 0}
+                mapping = {
+                    "yes": 1, "no": 0, "normal": 1, "abnormal": 0, 
+                    "present": 1, "notpresent": 0, "good": 1, "poor": 0
+                }
+                
                 user_data = {
-                    "age": age, "bp": bp, "sc": sc, "hemo": hemo, "bgr": bgr, "bu": bu, "sg": sg, "al": al, 
-                    "htn": mapping[htn], "su": su, "rbc": mapping[rbc], "pc": mapping[pc], "pcc": mapping[pcc], 
-                    "ba": mapping[ba], "sod": sod, "pot": pot, "pcv": pcv, "wc": wc, "rc": rc, "dm": mapping[dm], 
+                    "age": age, "bp": bp, "sc": sc, "hemo": hemo, "bgr": bgr, "bu": bu, 
+                    "sg": sg, "al": al, "htn": mapping[htn], "su": su, "rbc": mapping[rbc], 
+                    "pc": mapping[pc], "pcc": mapping[pcc], "ba": mapping[ba], "sod": sod, 
+                    "pot": pot, "pcv": pcv, "wc": wc, "rc": rc, "dm": mapping[dm], 
                     "cad": mapping[cad], "appet": mapping[appet], "pe": mapping[pe], "ane": mapping[ane]
                 }
                 
                 expected_features = scaler.feature_names_in_
                 df_final = pd.DataFrame(0, index=[0], columns=expected_features)
+                
                 for col in expected_features:
-                    if col in user_data: df_final[col] = user_data[col]
+                    if col in user_data: 
+                        df_final[col] = user_data[col]
                 
                 scaled_input = scaler.transform(df_final)
                 prob = rf_model.predict_proba(scaled_input)[0][1]
                 
-                st.session_state.last_prob, st.session_state.last_metrics = prob, {"age": age, "bp": bp, "sc": sc, "hemo": hemo}
+                st.session_state.last_prob = prob
+                st.session_state.last_metrics = {
+                    "age": age, "bp": bp, "sc": sc, "hemo": hemo
+                }
+                
                 v_num, next_v = calculate_followup(prob, st.session_state.username)
                 st.session_state.next_v = next_v
                 
                 db = get_db_connection()
                 cursor = db.cursor()
                 cursor.execute("""INSERT INTO predictions 
-                    (username, model_used, probability, prediction, visit_number, next_visit, created_at, age, bp, bgr, bu, sc, hemo)
+                    (username, model_used, probability, prediction, visit_number, 
+                     next_visit, created_at, age, bp, bgr, bu, sc, hemo)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", 
-                    (st.session_state.username, "Random Forest", prob, 1 if prob > 0.5 else 0, v_num, str(next_v), str(datetime.now()), age, bp, bgr, bu, sc, hemo))
+                    (st.session_state.username, "Random Forest", prob, 
+                     1 if prob > 0.5 else 0, v_num, str(next_v), 
+                     str(datetime.now()), age, bp, bgr, bu, sc, hemo)
+                )
                 db.commit()
                 db.close()
                 st.rerun()
@@ -323,14 +398,32 @@ def patient_page():
         if "last_prob" in st.session_state:
             st.markdown("---")
             prob = st.session_state.last_prob
+            
             res_col1, res_col2 = st.columns(2)
+            
             with res_col1:
                 st.metric("Risk Score", f"{prob*100:.1f}%")
-                if prob > 0.7: st.error("🚨 High Risk Alert")
-                elif prob > 0.3: st.warning("⚠️ Moderate Risk")
-                else: st.success("✅ Low Risk")
-                pdf_data = generate_medical_pdf(st.session_state.username, prob, st.session_state.next_v, st.session_state.last_metrics)
-                st.download_button("📩 Download Medical Report", data=pdf_data, file_name=f"CKD_Report_{st.session_state.username}.pdf")
+                
+                if prob > 0.7: 
+                    st.error("🚨 High Risk Alert")
+                elif prob > 0.3: 
+                    st.warning("⚠️ Moderate Risk")
+                else: 
+                    st.success("✅ Low Risk")
+                
+                pdf_data = generate_medical_pdf(
+                    st.session_state.username, 
+                    prob, 
+                    st.session_state.next_v, 
+                    st.session_state.last_metrics
+                )
+                
+                st.download_button(
+                    "📩 Download Medical Report", 
+                    data=pdf_data, 
+                    file_name=f"CKD_Report_{st.session_state.username}.pdf"
+                )
+            
             with res_col2:
                 st.info(f"📅 Recommended Follow-up: {st.session_state.next_v}")
 
@@ -338,24 +431,24 @@ def patient_page():
 # DOCTOR DASHBOARD (MYSQL VERSION)
 # =====================================================
 def doctor_dashboard():
-    # -------------------------------
     st.sidebar.write(f"Role: {st.session_state.role.upper()}")
     st.title("👨‍⚕️ Clinical Supervisor Dashboard")
+    
     db = get_db_connection()
     data = pd.read_sql("SELECT * FROM predictions", db)
     db.close()
+    
     if not data.empty:
         m1, m2, m3 = st.columns(3)
         m1.metric("Patients Analyzed", len(data['username'].unique()))
         m2.metric("Critical Alerts", len(data[data['probability'] > 0.7]))
         m3.metric("Avg Severity", f"{data['probability'].mean()*100:.1f}%")
+        
         st.line_chart(data.set_index('created_at')['probability'])
         st.dataframe(data, use_container_width=True)
-    else: st.info("No records found.")
+    else: 
+        st.info("No records found.")
 
-# =====================================================
-# MAIN ROUTING
-# =====================================================
 # =====================================================
 # MAIN ROUTING (WITH GLOBAL SIDEBAR LOGOUT)
 # =====================================================
@@ -378,9 +471,11 @@ else:
         st.session_state.logged_in = False
         st.session_state.username = None
         st.session_state.role = None
+        
         # Clean up any lingering patient prediction data
         if "last_prob" in st.session_state:
             del st.session_state.last_prob
+        
         st.rerun()
 
     st.sidebar.markdown("---")
@@ -390,12 +485,3 @@ else:
         patient_page()
     else:
         doctor_dashboard()
-
-
-
-
-
-
-
-
-

@@ -188,6 +188,33 @@ def auth_page():
             st.error(f"Error: {e}")
         finally:
             db.close()
+            st.markdown("---")
+with st.expander("🔑 Forgot Password?"):
+    reset_u = st.text_input("Enter Username to Reset")
+    if reset_u:
+        db = get_db_connection()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT security_question, security_answer FROM users WHERE username=%s", (reset_u,))
+        user_data = cursor.fetchone()
+        db.close()
+        
+        if user_data:
+            st.write(f"**Security Question:** {user_data['security_question']}")
+            user_ans = st.text_input("Your Answer", key="reset_ans")
+            new_reset_p = st.text_input("New Password", type="password", key="new_p_reset")
+            
+            if st.button("Reset My Password"):
+                if user_ans.lower().strip() == user_data['security_answer']:
+                    db = get_db_connection()
+                    cursor = db.cursor()
+                    cursor.execute("UPDATE users SET password=%s WHERE username=%s", (hash_password(new_reset_p), reset_u))
+                    db.commit()
+                    db.close()
+                    st.success("Password Reset Successfully! You can now log in.")
+                else:
+                    st.error("Incorrect answer to security question.")
+        else:
+            st.warning("Username not found.")
 
 # =====================================================
 # PATIENT INTERFACE
@@ -363,6 +390,7 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+
 
 
 

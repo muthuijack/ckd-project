@@ -320,20 +320,41 @@ def doctor_dashboard():
 # =====================================================
 # MAIN ROUTING
 # =====================================================
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-# At the very bottom of your app2.py
+# =====================================================
+# MAIN ROUTING (WITH GLOBAL SIDEBAR LOGOUT)
+# =====================================================
+if "logged_in" not in st.session_state: 
+    st.session_state.logged_in = False
+
 if not st.session_state.logged_in:
     auth_page()
 else:
-    # This logout button will now appear for BOTH Doctors and Patients automatically
-    if st.sidebar.button("Log Out"):
+    # 1. Global Sidebar Header
+    st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2966/2966327.png", width=100)
+    st.sidebar.title(f"Welcome, {st.session_state.username}")
+    st.sidebar.write(f"Role: {st.session_state.role.upper()}")
+    
+    st.sidebar.markdown("---")
+    
+    # 2. Global Logout Button (Visible to everyone)
+    if st.sidebar.button("🚪 Log Out"):
+        # Clear specific session data
         st.session_state.logged_in = False
+        st.session_state.username = None
+        st.session_state.role = None
+        # Clean up any lingering patient prediction data
+        if "last_prob" in st.session_state:
+            del st.session_state.last_prob
         st.rerun()
 
+    st.sidebar.markdown("---")
+
+    # 3. Route to the correct dashboard
     if st.session_state.role == "patient":
         patient_page()
     else:
         doctor_dashboard()
+
 
 
 

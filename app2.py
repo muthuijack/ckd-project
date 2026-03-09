@@ -209,35 +209,41 @@ def auth_page():
             role = st.selectbox("Role", ["patient", "doctor"])
             phone = st.text_input("Phone Number")
             
-            # --- ADDED SECURITY QUESTIONS ---
-            s_ques = st.selectbox("Security Question", [
-                "What was the name of your first pet?",
-                "What is your mother's maiden name?",
-                "What was the model of your first car?",
-                "In what city were you born?"
-            ])
-            s_ans = st.text_input("Answer to Security Question")
-            # --------------------------------
+            with tab2:
+    new_u = st.text_input("New Username")
+    new_p = st.text_input("New Password", type="password")
+    role = st.selectbox("Role", ["patient", "doctor"])
+    phone = st.text_input("Phone Number")
+    
+    # --- New Security Question Fields ---
+    questions = [
+        "What was the name of your first school?",
+        "What is your mother's maiden name?",
+        "What was the name of your first pet?",
+        "In what city were you born?"
+    ]
+    s_ques = st.selectbox("Select a Security Question (for password recovery)", questions)
+    s_ans = st.text_input("Answer to Security Question")
 
-            if st.button("Register Account"):
-                db = get_db_connection()
-                cursor = db.cursor()
-                try:
-                    # Added s_ques and s_ans to the INSERT query
-                    query = """INSERT INTO users(
-                        username, password, role, phone, security_question, 
-                        security_answer, created_at
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s)"""
-                    cursor.execute(query, (
-                        new_u, hash_password(new_p), role, phone, s_ques, 
-                        s_ans.lower().strip(), str(datetime.now())
-                    ))
-                    db.commit()
-                    st.success("Registration Successful!")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-                finally:
-                    db.close()
+    if st.button("Register Account"):
+        if not s_ans:
+            st.warning("Please provide an answer for password recovery.")
+        else:
+            db = get_db_connection()
+            cursor = db.cursor()
+            try:
+                # Updated query to include security fields
+                query = """INSERT INTO users(username, password, role, phone, 
+                           security_question, security_answer, created_at) 
+                           VALUES(%s, %s, %s, %s, %s, %s, %s)"""
+                cursor.execute(query, (new_u, hash_password(new_p), role, phone, 
+                                     s_ques, s_ans.lower().strip(), str(datetime.now())))
+                db.commit()
+                st.success("Account created! You can now log in.")
+            except:
+                st.error("Username already exists.")
+            finally:
+                db.close()
         
         st.markdown("---")
         
@@ -485,3 +491,4 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+

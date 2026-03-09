@@ -303,6 +303,7 @@ def patient_page():
 # =====================================================
 def doctor_dashboard():
     # -------------------------------
+    st.sidebar.write(f"Role: {st.session_state.role.upper()}")
     st.title("👨‍⚕️ Clinical Supervisor Dashboard")
     db = get_db_connection()
     data = pd.read_sql("SELECT * FROM predictions", db)
@@ -333,6 +334,7 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+
 
 
 

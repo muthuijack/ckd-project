@@ -7,3 +7,5 @@ matplotlib
 mysql-connector-python
 twilio
 fpdf
+reportlab
+

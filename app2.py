@@ -160,20 +160,34 @@ def auth_page():
                     st.rerun()
                 else: st.error("Invalid Credentials")
         with tab2:
-            new_u = st.text_input("New Username")
-            new_p = st.text_input("New Password", type="password")
-            role = st.selectbox("Role", ["patient", "doctor"])
-            phone = st.text_input("Phone Number")
-            if st.button("Register Account"):
-                db = get_db_connection()
-                cursor = db.cursor()
-                try:
-                    cursor.execute("INSERT INTO users(username,password,role,phone,created_at) VALUES(%s,%s,%s,%s,%s)",
-                                 (new_u, hash_password(new_p), role, phone, str(datetime.now())))
-                    db.commit()
-                    st.success("Success! Please Login.")
-                except: st.error("User exists.")
-                finally: db.close()
+    new_u = st.text_input("New Username")
+    new_p = st.text_input("New Password", type="password")
+    role = st.selectbox("Role", ["patient", "doctor"])
+    phone = st.text_input("Phone Number")
+    
+    # --- ADDED SECURITY QUESTIONS ---
+    s_ques = st.selectbox("Security Question", [
+        "What was the name of your first pet?",
+        "What is your mother's maiden name?",
+        "What was the model of your first car?",
+        "In what city were you born?"
+    ])
+    s_ans = st.text_input("Answer to Security Question")
+    # --------------------------------
+
+    if st.button("Register Account"):
+        db = get_db_connection()
+        cursor = db.cursor()
+        try:
+            # Added s_ques and s_ans to the INSERT query
+            query = "INSERT INTO users(username,password,role,phone,security_question,security_answer,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s)"
+            cursor.execute(query, (new_u, hash_password(new_p), role, phone, s_ques, s_ans.lower().strip(), str(datetime.now())))
+            db.commit()
+            st.success("Registration Successful!")
+        except Exception as e:
+            st.error(f"Error: {e}")
+        finally:
+            db.close()
 
 # =====================================================
 # PATIENT INTERFACE
@@ -349,6 +363,7 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+
 
 
 

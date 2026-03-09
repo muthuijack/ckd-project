@@ -179,11 +179,6 @@ def auth_page():
 # PATIENT INTERFACE
 # =====================================================
 def patient_page():
-    st.sidebar.title(f"Patient: {st.session_state.username}")
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.rerun()
-
     st.title("🏥 NephroAI Clinical Portal")
     tabs = st.tabs(["📝 Data Entry", "📚 Kidney Education", "🧪 Marker Guide"])
 
@@ -354,6 +349,7 @@ else:
         patient_page()
     else:
         doctor_dashboard()
+
 
 
 
